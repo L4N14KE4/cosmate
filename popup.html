@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>코스모스 도우미</title>
+<style>
+  body { width: 300px; margin: 0; padding: 12px 16px; font: 13px/1.5 Pretendard, -apple-system, "Apple SD Gothic Neo", sans-serif; color: #2c2f32; }
+  h1 { margin: 0 0 4px; font-size: 15px; }
+  label { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid #eef0f2; }
+  .warn { display: none; margin: 0 0 8px; padding: 8px 10px; border-radius: 6px; background: #fdecec; color: #c62828; }
+  label:has([name=rightClick]:checked) + .warn { display: block; }
+  .note { margin: 8px 0 0; color: #899199; font-size: 12px; }
+</style>
+<h1>코스모스 도우미</h1>
+<label>이번 주 할 일: 과목명 눌러 과목으로 이동 <input type="checkbox" name="courseLink"></label>
+<label>파일 옆 다운로드 버튼 <input type="checkbox" name="fileButton"></label>
+<label>퀴즈 인쇄 버튼 <input type="checkbox" name="quizPrint"></label>
+<label>강의 다운로드 (MP4/MP3) <input type="checkbox" name="vodDownload"></label>
+<label>강의 종료 알림 (배지·소리) <input type="checkbox" name="endNotify"></label>
+<label>강의 종료 후 다음 영상으로 이동 <input type="checkbox" name="autoNext"></label>
+<label>우클릭·복사 차단 해제 <input type="checkbox" name="rightClick"></label>
+<p class="warn">현재 열려 있는 웹사이트의 모든 페이지에서 동작하며, 다른 웹사이트에는 적용되지 않습니다.</p>
+<p class="note">설정은 LMS 페이지를 새로고침하면 적용됩니다. (우클릭 해제는 바로 적용)</p>
+<script src="settings.js"></script>
+<script src="popup.js"></script>

@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "코스모스 도우미",
+  "version": "0.1.0",
+  "description": "인천대학교 LMS(코스모스) 학습 보조 도구",
+  "icons": { "128": "icon.png" },
+  "action": { "default_popup": "popup.html" },
+  "background": { "service_worker": "background.js" },
+  "permissions": ["storage", "notifications", "activeTab", "scripting"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://lms.inu.ac.kr/*"],
+      "js": ["settings.js", "content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": ["https://lms.inu.ac.kr/mod/vod/view.php*"],
+      "js": ["vendor/mux.min.js", "vendor/lame.min.js", "vod.js"]
+    }
+  ]
+}
