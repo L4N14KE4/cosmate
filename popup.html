@@ -3,8 +3,8 @@
 <meta charset="utf-8">
 <title>코스모스 도우미</title>
 <style>
-  /* 색·모서리·글꼴은 LMS 테마(lms.inu.ac.kr의 --csms-* 값)를 따른다. 스위치·카드·알약 버튼은
-     Bootstrap의 클래스 이름과 모양만 빌리고 Bootstrap 자체는 넣지 않았다. */
+  /* 색·모서리·글꼴은 LMS 테마(lms.inu.ac.kr의 --csms-* 값)를 따름. 스위치·카드·알약 버튼은
+     Bootstrap의 클래스 이름과 모양만 빌리고 Bootstrap 자체는 넣지 않음. */
   :root {
     --brand: #1181f9; --brand-hover: #0e6fd9; --brand-soft: #e0eefe; --brand-line: #c9e0fc; --brand-focus: rgba(17, 129, 249, .25);
     --text: #161819; --text-2: #2c2f32; --gray: #899199;
@@ -29,17 +29,17 @@
   #site button[hidden], #apply[hidden] { display: none; }
   #site button:hover, #apply:hover { background: var(--brand-hover); }
   #site button:focus-visible, #apply:focus-visible { outline: 0; box-shadow: 0 0 0 3px var(--brand-focus); }
-  /* 하단 버튼: 새로고침이 필요한 옵션을 바꿨을 때만 보인다. */
+  /* 하단 버튼: 새로고침이 필요한 옵션을 바꿨을 때만 보임. */
   #apply { display: block; margin-top: 6px; padding: 8px 14px; font-size: 13px; }
 
-  /* LMS 화면별 카드. 이름은 왼쪽 파스텔 띠에 둔다(LMS 과목 목록 카드의 색 띠처럼). */
+  /* LMS 화면별 카드. 이름은 왼쪽 파스텔 띠에 둠(LMS 과목 목록 카드의 색 띠처럼). */
   .group { display: flex; margin-bottom: 4px; overflow: hidden; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
   .group h2 { display: flex; flex: none; align-items: center; justify-content: center; width: 52px; margin: 0; padding: 6px;
               background: var(--tag, #d5e9fe); text-align: center; font-size: 12px; font-weight: 600; line-height: 1.35; color: var(--text-2); }
   .rows { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-  /* 이름 띠가 두 줄("모든 화면")이라 카드가 높을 때, 한 줄짜리 행이 높이를 채워 가운데에 온다. */
+  /* 이름 띠가 두 줄("모든 화면")이라 카드가 높을 때, 한 줄짜리 행이 높이를 채워 가운데에 오도록 함. */
   .rows > .row { flex: 1 0 auto; }
-  /* 이 사이트가 꺼져 있으면 코스모스 기능이 돌지 않으므로 비활성처럼 보이게 한다(popup.js가 inert를 붙인다). */
+  /* 이 사이트가 꺼져 있으면 코스모스 기능이 돌지 않으므로 비활성처럼 보이게 함(popup.js가 inert를 붙임). */
   .needs-site { transition: opacity .15s, filter .15s; }
   .needs-site[inert] { opacity: .45; filter: grayscale(1); }
   .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; padding: 5px 12px; cursor: pointer; transition: background .12s; }
