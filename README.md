@@ -1,6 +1,6 @@
-# <img src="cosmos-lxp-logo.png" width="32" height="32" alt="" align="top"> 코스모스 LXP 도우미
+# <img src="cosmos-lxp-logo.png" width="32" height="32" alt="" align="top"> Cosmos Mate
 
-코스모스 LXP(신버전) 기반 LMS를 조금 더 편하게 쓰기 위한 **비공식·비영리** 크롬 확장 프로그램입니다.
+**Cosmos Mate**는 코스모스 LXP(신버전) 기반 LMS를 조금 더 편하게 쓰기 위한 **비공식·비영리** 크롬 확장 프로그램입니다.
 인천대학교 LMS(lms.inu.ac.kr)를 기준으로 만들었고, 같은 신버전 코스모스 화면을 쓰는 다른 학교 LMS도 자동으로 감지합니다.
 
 > [!IMPORTANT]
@@ -11,7 +11,7 @@
 
 팝업에서 기능마다 켜고 끌 수 있습니다.
 
-<p align="center"><img src="docs/popup.png" width="360" alt="코스모스 LXP 도우미 팝업 화면"></p>
+<p align="center"><img src="docs/popup.png" width="360" alt="Cosmos Mate 팝업 화면"></p>
 
 **홈**
 - 홈의 목록형 보기를 얇게 표시
@@ -38,7 +38,7 @@
 
 ## 설치
 
-1. [Releases](../../releases)에서 최신 `cosmos-lxp-helper-*.zip`을 내려받아 압축을 풉니다.
+1. [Releases](../../releases)에서 최신 `cosmos-mate-*.zip`을 내려받아 압축을 풉니다.
 2. 크롬에서 `chrome://extensions`를 열고 오른쪽 위 **개발자 모드**를 켭니다.
 3. **압축해제된 확장 프로그램을 로드합니다**를 누르고 압축을 푼 폴더를 선택합니다.
 
