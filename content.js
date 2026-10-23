@@ -1,5 +1,5 @@
-// Runs on every page at document_start; features only wire up where the site is on (see
-// siteActive below). vod.js reuses the helpers below.
+// 모든 페이지에서 document_start에 실행된다. 기능은 사이트가 켜진 곳(siteActive)에서만 붙이고,
+// 아래 도우미 함수는 vod.js도 쓴다.
 let cfg = { ...DEFAULTS };
 const ready = chrome.storage.local.get(DEFAULTS).then(v => (cfg = v));
 chrome.storage.onChanged.addListener(ch => {
@@ -8,19 +8,18 @@ chrome.storage.onChanged.addListener(ch => {
   syncCompact();
 });
 
-// LMS에서는 시험 응시와 답안검토를 포함한 모든 페이지에서 설정에 따라 우클릭·복사 차단을 해제한다.
-// The extension now runs at other schools' LMS too; this unlock stays on INU only.
+// 우클릭·복사 차단 해제. 전역 설정(cfg.rightClick)을 따르고, 이 스크립트는 모든 사이트에서
+// 돌기 때문에 켜 두면 퀴즈 응시·답안검토를 포함해 모든 사이트에 적용된다.
 const unlock = () => cfg.rightClick
 
-// Our window capture listener runs before the site's handlers (e.g. the video player)
-// and keeps them from seeing the event. paste is left alone so editors keep working.
+// window 캡처 단계에서 먼저 받아 사이트(동영상 플레이어 등)의 차단 처리로 넘기지 않는다.
+// 붙여넣기(paste)는 편집기가 동작하도록 건드리지 않는다.
 for (const type of ['contextmenu', 'copy', 'cut', 'selectstart', 'dragstart']) {
   window.addEventListener(type, e => unlock() && e.stopImmediatePropagation(), true);
 }
-// The quiz secure window also cancels the LEFT mousedown's default, which stops mouse
-// drag-selection before it starts. On both quiz review and attempt pages, neutralize that
-// over plain content (not over controls) so text can be selected; elsewhere only the right button is handled.
-// ponytail: control list is a heuristic — add a selector if some widget stops dragging.
+// 퀴즈 보안 창은 왼쪽 mousedown 기본 동작도 막아 드래그 선택이 안 된다. 퀴즈 답안검토·응시
+// 화면에서는 컨트롤이 아닌 본문 위의 왼쪽 클릭을 풀어 주고, 다른 화면은 오른쪽 버튼만 처리한다.
+// ponytail: 컨트롤 목록은 어림값이다. 드래그가 안 되는 위젯이 생기면 선택자를 추가한다.
 const quizPage = ['/mod/quiz/review.php', '/mod/quiz/attempt.php'].includes(location.pathname);
 const CONTROL = 'a,button,input,select,textarea,label,[role=button],[draggable="true"],.btn,[data-bs-toggle]';
 window.addEventListener('mousedown', e => {
@@ -28,21 +27,18 @@ window.addEventListener('mousedown', e => {
   if (e.button === 2) return e.stopImmediatePropagation();
   if (quizPage && e.button === 0 && !e.target.closest(CONTROL)) e.stopImmediatePropagation();
 }, true);
-// Select-all / copy / cut shortcuts: Ctrl on Windows, Cmd on Mac. e.code is the physical
-// key, so it also matches while the Korean IME is on.
+// 전체 선택·복사·잘라내기 단축키(Windows는 Ctrl, Mac은 Cmd). e.code는 물리 키라 한글 입력 중에도 맞는다.
 for (const type of ['keydown', 'keyup']) {
   window.addEventListener(type, e => unlock() && (e.ctrlKey || e.metaKey) && ['KeyA', 'KeyC', 'KeyX'].includes(e.code) && e.stopImmediatePropagation(), true);
 }
-// CSS `user-select: none` isn't an event, so lift it with one rule while unlocked
-// (covers elements added later, and switching off just drops the class).
+// CSS user-select: none은 이벤트로 못 막아서, 해제 중에는 html 클래스 하나로 덮는다(나중에 생긴 요소 포함).
 function syncUnlockCss() {
   document.documentElement.classList.toggle('cmx-free', unlock());
 }
 ready.then(syncUnlockCss);
 
-// Compact home list ("목록형"). The class goes on as soon as the settings are read so the big
-// list never flashes before the first paint; the CSS only matches the Coursemos home list, so it
-// is inert elsewhere. Once the page is parsed (see below) it is dropped again if the site is off.
+// 홈 목록형 얇게 보기. 설정을 읽자마자 클래스를 붙여 큰 목록이 잠깐 보이지 않게 하고, 페이지를 다
+// 읽은 뒤 사이트가 꺼져 있으면 뗀다. CSS는 코스모스 홈 목록에만 맞아서 다른 곳에는 영향이 없다.
 let pageParsed = false;
 function syncCompact() {
   document.documentElement.classList.toggle('cmx-compact', cfg.compactList && (!pageParsed || siteActive()));
@@ -54,9 +50,8 @@ const DL_SVG = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmln
 const css = document.createElement('style');
 css.textContent = `
   html.cmx-free * { -webkit-user-select: text !important; user-select: text !important; }
-  /* Thin rows for the home list view (105px -> 52px): title and tags on one line, smaller type.
-     !important because the site's own rules start with #page-content. Desktop widths only; the
-     site has its own stacked layout below 576px. */
+  /* 홈 목록형 행을 얇게(105px → 52px): 과목명과 태그를 한 줄로. 사이트 규칙이 #page-content로
+     시작해서 !important가 필요하다. 576px 미만은 사이트 자체 모바일 배치를 쓴다. */
   @media (min-width: 576px) {
     html.cmx-compact ul.course-lists-listview { gap: 6px !important; }
     html.cmx-compact .course-list-item .course-thumbnail { width: 12px !important; }
@@ -83,8 +78,8 @@ css.textContent = `
 `;
 document.documentElement.append(css);
 
-// Calls fn once for every element matching sel, including ones rendered later.
-// ponytail: one observer per call re-queries on each mutation batch; fine for LMS pages.
+// sel에 맞는 요소마다 fn을 한 번씩 실행한다(나중에 생기는 요소 포함).
+// ponytail: 호출마다 관찰자 하나가 DOM이 바뀔 때마다 다시 찾는다. LMS 페이지에서는 충분하다.
 function onEach(sel, fn) {
   const seen = new WeakSet();
   const run = () => document.querySelectorAll(sel).forEach(el => seen.has(el) || (seen.add(el), fn(el)));
@@ -92,9 +87,9 @@ function onEach(sel, fn) {
   run();
 }
 
-// Site toast markup (.csms-toast); ms = 0 keeps it until removed. Lecture pages have the
-// site's own toast container; elsewhere ours hangs right under the fixed top bar.
-// Position is inline because our <style> loads before the page CSS, so .toast-container would win.
+// 사이트 토스트(.csms-toast) 모양. ms = 0이면 직접 지울 때까지 남는다. 강의 화면은 사이트의 토스트
+// 상자를 쓰고, 없으면 상단 바 바로 아래에 만든다. 우리 <style>이 사이트 CSS보다 먼저 로드되어
+// .toast-container 규칙에 밀리므로 위치는 인라인으로 준다.
 function toast(msg, type = 'guide', ms = 4000) {
   let box = document.querySelector('.csms-toast-container');
   if (!box) {
@@ -116,8 +111,8 @@ function toast(msg, type = 'guide', ms = 4000) {
   return t;
 }
 
-// First-use notice in the site's modal markup; resolves true once the user agreed.
-// The dialog carries .modal only so .modal-content picks up the site's --bs-modal-* variables.
+// 첫 사용 안내를 사이트 모달 모양으로 띄우고, 동의하면 true를 돌려준다.
+// .modal 클래스는 .modal-content가 사이트의 --bs-modal-* 값을 받도록 붙인다.
 async function notice(key, title, body) {
   const k = 'notice_' + key;
   if ((await chrome.storage.local.get(k))[k]) return true;
@@ -149,15 +144,15 @@ function dlIcon(tag) {
   return el;
 }
 
-// worker.php is what the document viewer calls; it returns the original file's download URL.
+// 문서 뷰어가 부르는 worker.php. 원본 파일의 다운로드 주소를 알려 준다.
 async function fileInfo(cmid) {
   for (let i = 0; i < 10; i++) {
     const t = await (await fetch('/local/csmsdoc/worker.php', {
       method: 'POST',
       body: new URLSearchParams({ id: cmid, tp: 'm', pg: 'ubfile' }),
     })).text();
-    const j = JSON.parse(t.slice(t.indexOf('{"code"'))); // first call may be prefixed by a PHP warning
-    if (!String(j.code).startsWith('2')) return j; // 2xx = viewer still converting
+    const j = JSON.parse(t.slice(t.indexOf('{"code"'))); // 첫 호출 앞에 PHP 경고가 붙을 수 있다
+    if (!String(j.code).startsWith('2')) return j; // 2xx = 아직 변환 중
     await new Promise(r => setTimeout(r, 2000));
   }
   throw new Error('파일 변환이 끝나지 않았습니다. 잠시 후 다시 시도하세요.');
@@ -168,7 +163,7 @@ async function downloadUbfile(cmid) {
   try {
     const j = await fileInfo(cmid);
     if (j.file_download !== '1' || !j.file_url) return toast('교수님이 다운로드를 허용하지 않은 파일입니다.', 'warning');
-    fetch(`/mod/ubfile/view.php?id=${cmid}`); // same visit the normal flow makes, so the activity still counts as viewed
+    fetch(`/mod/ubfile/view.php?id=${cmid}`); // 원래 흐름처럼 view.php를 방문해 열람 기록을 남긴다
     const a = document.createElement('a');
     a.href = j.file_url;
     a.download = '';
@@ -180,22 +175,13 @@ async function downloadUbfile(cmid) {
   }
 }
 
-// The extension runs on every site, so features only wire up where the site is switched on:
-// by the user's per-site choice (popup), else by auto-detection of the new Coursemos UI.
-// Detection ORs several signals so a school that changes one still matches. All of them are in
-// the server-rendered HTML, so the answer is the same at DOMContentLoaded and whenever the
-// popup asks. Measured on 107 saved LMS pages: none hit a non-Coursemos page, and none hit the
-// old `coursemosv2` theme except `ubion-courseware` / `csms-` on 2 of 33 (transitional pages).
-// Deliberately NOT used:
-//  - `/local/ubion` links: 27 of the 33 old-theme pages have them, and they'd switch the
-//    extension on for a layout it doesn't fit.
-//  - `<body class="coursemos-…">`: absent in the saved HTML, but old-theme pages (cyber.ewha.ac.kr)
-//    add it from JS after load, so it flags old layouts and shows up at unpredictable times.
-// The trailing slash in the theme path keeps `coursemosv2` out.
+// 사이트 켜짐 판단: 팝업에서 고른 사이트별 설정이 우선이고, 없으면 신버전 코스모스 화면을 자동
+// 감지한다. 서버가 내려준 HTML에 아래 신호 중 하나라도 있으면 켠다. /local/ubion 링크와 body의
+// coursemos- 클래스는 구버전 화면에도 나와서 쓰지 않는다.
 const SIGNALS = [
-  'link[href*="/theme/styles.php/coursemos/"]', // theme stylesheet
-  'script[src*="ubion-courseware"]', // new-UI courseware bundle (not on every page)
-  '[class*="csms-"]', // new-UI component classes
+  'link[href*="/theme/styles.php/coursemos/"]', // 테마 스타일시트(끝의 /로 구버전 coursemosv2 제외)
+  'script[src*="ubion-courseware"]', // 신버전 코스웨어 스크립트(모든 페이지에 있지는 않음)
+  '[class*="csms-"]', // 신버전 컴포넌트 클래스
 ];
 const detected = () => SIGNALS.some(s => document.querySelector(s));
 const siteActive = () => {
@@ -208,14 +194,14 @@ Promise.all([ready, parsed]).then(() => {
   syncCompact();
 });
 
-// The popup asks the top frame about this site, to label its on/off switch.
+// 팝업이 이 사이트의 켜짐/꺼짐을 표시하려고 최상위 프레임에 묻는다.
 chrome.runtime.onMessage.addListener((m, sender, reply) => {
   if (m.cmx === 'status') reply({ origin: location.origin, detected: detected(), active: siteActive() });
 });
 
 Promise.all([ready, parsed]).then(() => {
   if (!siteActive()) return;
-  // 1. 이번 주 할 일: course name links to the course.
+  // 1. 이번 주 할 일: 과목명을 과목 링크로 바꾼다.
   if (cfg.courseLink) {
     onEach('.current-activity button.grid-row-course', btn => {
       const id = btn.dataset.bsTarget?.match(/accordion-course-(\d+)/)?.[1];
@@ -225,7 +211,7 @@ Promise.all([ready, parsed]).then(() => {
       a.href = `/course/view.php?id=${id}`;
       a.className = 'text text-truncate cmx-course-link';
       a.textContent = span.textContent;
-      // The link sits inside the accordion button, so navigate ourselves and keep the accordion shut.
+      // 링크가 아코디언 버튼 안에 있어서 직접 이동하고 아코디언은 열지 않는다.
       a.addEventListener('click', e => {
         e.preventDefault();
         e.stopPropagation();
@@ -235,7 +221,7 @@ Promise.all([ready, parsed]).then(() => {
     });
   }
 
-  // 7. Download icon next to files.
+  // 7. 파일 옆 다운로드 아이콘.
   if (cfg.fileButton) {
     const addUbfileButton = (where, cmid, append) => {
       const b = dlIcon('button');
@@ -253,7 +239,7 @@ Promise.all([ready, parsed]).then(() => {
     onEach('.current-activity a.cell-activity-link[href*="/mod/ubfile/view.php"]', a => {
       addUbfileButton(a, new URL(a.href).searchParams.get('id'));
     });
-    // Board/assignment attachments that open in the browser instead of downloading.
+    // 다운로드가 아니라 브라우저에서 열리는 첨부파일 링크(forcedownload 없음)에도 붙인다.
     onEach('#region-main a[href*="/pluginfile.php/"]:not([href*="forcedownload"]):not(.cmx-dl)', a => {
       const d = dlIcon('a');
       const u = new URL(a.href);
@@ -265,25 +251,23 @@ Promise.all([ready, parsed]).then(() => {
     });
   }
 
-  // 8. File cards: some files are "download mode" (the teacher's setting): the card link has no
-  // inline onclick and view.php redirects straight to the file, so a click downloads it. Open
-  // those in the document viewer popup instead, same call the site makes for "viewer mode"
-  // cards. Assignment/board PDF attachments (linked with ?forcedownload=1) open in a new tab, in
-  // the browser's PDF viewer. Cmd/Ctrl/Shift/Alt+click keeps the site's behavior. cfg is read at
-  // click time, so the popup switch takes effect immediately.
+  // 8. 미리보기로 열기. 다운로드형 파일 카드(onclick 없음, view.php가 바로 파일로 넘김)는 사이트가
+  // 보기형 카드에 쓰는 것과 같은 뷰어 팝업으로 열고, 과제·게시판 PDF 첨부파일(?forcedownload=1)은
+  // 새 탭의 브라우저 PDF 뷰어로 연다. Ctrl/Cmd/Shift/Alt+클릭은 사이트 동작 그대로 둔다.
+  // 설정은 클릭할 때 읽어서 팝업 스위치가 바로 적용된다.
   document.addEventListener('click', e => {
     if (!cfg.previewFiles || e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-    // Download icons (ours, the site's buttons) mean "download", so only plain file links.
+    // 다운로드 아이콘(우리 것, 사이트 버튼)은 그대로 두고 파일 링크만 바꾼다.
     const att = e.target.closest?.('#region-main a[href*="/pluginfile.php/"][href*="forcedownload=1"]:not(.cmx-dl):not([class*="btn"])');
     if (att && /\.pdf$/i.test(new URL(att.href).pathname)) {
       e.preventDefault();
       e.stopPropagation();
       const u = new URL(att.href);
       u.searchParams.delete('forcedownload');
-      // Assignments: without the flag the server sends the file inline.
+      // 과제: 표시를 빼면 서버가 브라우저에서 열리게 보낸다.
       if (u.pathname.includes('/mod_assign/')) return open(u.href, '_blank', 'noopener');
-      // Boards send attachments as downloads either way, so fetch the PDF and open it from
-      // memory. The tab opens right away, while the click still allows pop-ups.
+      // 게시판은 표시와 상관없이 다운로드로 보내서, PDF를 받아 메모리에서 연다. 팝업이 허용되는
+      // 클릭 직후에 탭부터 연다.
       const w = open('', '_blank');
       if (!w) return;
       w.document.title = 'PDF를 불러오는 중…';
@@ -298,18 +282,17 @@ Promise.all([ready, parsed]).then(() => {
       return;
     }
     const a = e.target.closest?.('li.modtype_ubfile a.activity-container-link');
-    if (!a || /window\.open/.test(a.getAttribute('onclick') || '')) return; // viewer mode: the site opens it
+    if (!a || /window\.open/.test(a.getAttribute('onclick') || '')) return; // 보기형 카드는 사이트가 연다
     e.preventDefault();
     e.stopPropagation();
     open(`/mod/ubfile/viewer.php?id=${new URL(a.href).searchParams.get('id')}`, 'documentviewer',
       'width=1005,height=1005,toolbar=no,location=no,menubar=no,copyhistory=no,status=no,directories=no,scrollbars=yes,resizable=1');
   }, true);
 
-  // 4. Quiz review printing — never during an exam attempt (no button, and Cmd+P keeps the
-  // site's blank print). The secure-window quiz hides everything via `.quiz-secure-window *`,
-  // so drop that class for the duration of the print.
+  // 4. 퀴즈 답안검토 인쇄. 응시 화면에는 넣지 않는다(버튼 없음, Cmd+P도 사이트의 빈 인쇄 그대로).
+  // 보안 창은 .quiz-secure-window * 로 모두 숨기므로 인쇄하는 동안만 그 클래스를 뗀다.
   if (cfg.quizPrint && location.pathname === '/mod/quiz/review.php') {
-    let secure; // body may not exist yet at document_start, so read it at print time
+    let secure; // document_start에는 body가 없을 수 있어 인쇄할 때 읽는다
     addEventListener('beforeprint', () => {
       secure = document.body.classList.contains('quiz-secure-window');
       document.body.classList.remove('quiz-secure-window');

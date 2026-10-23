@@ -3,8 +3,8 @@
 <meta charset="utf-8">
 <title>코스모스 도우미</title>
 <style>
-  /* Colors, radii and type follow the LMS theme (--csms-* tokens read from lms.inu.ac.kr). The
-     switch / card / pill-button parts use Bootstrap's class names and look, without bundling it. */
+  /* 색·모서리·글꼴은 LMS 테마(lms.inu.ac.kr의 --csms-* 값)를 따른다. 스위치·카드·알약 버튼은
+     Bootstrap의 클래스 이름과 모양만 빌리고 Bootstrap 자체는 넣지 않았다. */
   :root {
     --brand: #1181f9; --brand-hover: #0e6fd9; --brand-soft: #e0eefe; --brand-line: #c9e0fc; --brand-focus: rgba(17, 129, 249, .25);
     --text: #161819; --text-2: #2c2f32; --gray: #899199;
@@ -19,7 +19,7 @@
   header img { width: 22px; height: 22px; border-radius: 6px; }
   header h1 { margin: 0; font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: -.2px; }
 
-  /* This site on/off */
+  /* 이 사이트 켜기/끄기 */
   #site { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; padding: 10px 12px;
           background: var(--brand-soft); border: 1px solid var(--brand-line); border-radius: 12px; }
   #site[hidden] { display: none; }
@@ -29,18 +29,17 @@
   #site button[hidden], #apply[hidden] { display: none; }
   #site button:hover, #apply:hover { background: var(--brand-hover); }
   #site button:focus-visible, #apply:focus-visible { outline: 0; box-shadow: 0 0 0 3px var(--brand-focus); }
-  /* Bottom button: shown only after an option that needs a page refresh was changed. */
+  /* 하단 버튼: 새로고침이 필요한 옵션을 바꿨을 때만 보인다. */
   #apply { display: block; margin-top: 6px; padding: 8px 14px; font-size: 13px; }
 
-  /* One card per LMS screen. Its name sits in a pastel strip on the left, like the colored
-     bar on the LMS's own course list cards. */
+  /* LMS 화면별 카드. 이름은 왼쪽 파스텔 띠에 둔다(LMS 과목 목록 카드의 색 띠처럼). */
   .group { display: flex; margin-bottom: 4px; overflow: hidden; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
   .group h2 { display: flex; flex: none; align-items: center; justify-content: center; width: 52px; margin: 0; padding: 6px;
               background: var(--tag, #d5e9fe); text-align: center; font-size: 12px; font-weight: 600; line-height: 1.35; color: var(--text-2); }
   .rows { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-  /* A lone row fills a card made taller by a two-line strip ("모든 화면"), so it sits centered. */
+  /* 이름 띠가 두 줄("모든 화면")이라 카드가 높을 때, 한 줄짜리 행이 높이를 채워 가운데에 온다. */
   .rows > .row { flex: 1 0 auto; }
-  /* Off for this site: the Coursemos features don't run here, so look disabled (popup.js sets `inert`). */
+  /* 이 사이트가 꺼져 있으면 코스모스 기능이 돌지 않으므로 비활성처럼 보이게 한다(popup.js가 inert를 붙인다). */
   .needs-site { transition: opacity .15s, filter .15s; }
   .needs-site[inert] { opacity: .45; filter: grayscale(1); }
   .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; padding: 5px 12px; cursor: pointer; transition: background .12s; }
@@ -49,7 +48,7 @@
   .row span { font-size: 13px; font-weight: 500; color: var(--text-2); }
   .row small { display: block; margin-top: 1px; font-size: 11.5px; font-weight: 400; color: var(--gray); }
 
-  /* Bootstrap-style form switch */
+  /* Bootstrap 모양 스위치 */
   .form-switch .form-check-input { position: relative; flex: none; width: 34px; height: 20px; margin: 0; appearance: none;
          border-radius: 999px; background: var(--track); cursor: pointer; transition: background .15s; }
   .form-switch .form-check-input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;

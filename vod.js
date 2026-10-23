@@ -1,5 +1,5 @@
-// Runs on every page (top frame) after content.js (shares cfg, ready, parsed, siteActive, onEach,
-// toast, notice, css, DL_SVG), but only does anything where the site is switched on.
+// 모든 페이지의 최상위 프레임에서 content.js 다음에 실행되고(cfg, ready, parsed, siteActive, onEach,
+// toast, notice, css, DL_SVG를 함께 씀), 사이트가 켜진 곳에서만 동작한다.
 
 const VOD_NOTICE = `강의 다운로드는 개인 학습(복습) 목적으로만 사용해야 합니다.
 
@@ -12,13 +12,13 @@ css.textContent += `
   .cmx-vod-dl > summary { list-style: none; cursor: pointer; }
   .cmx-vod-dl > summary::-webkit-details-marker { display: none; }
   .cmx-vod-dl .dropdown-menu { position: absolute; top: calc(100% + 4px); right: 0; min-width: 0; width: max-content; }
-  .cmx-vod-dl .dropdown-item { padding-right: 14px; } /* the site's item is 14px left, 8px right */
-  /* Download toast: the site's .toast-text is a centered flex row, so stack the bar under the text. */
+  .cmx-vod-dl .dropdown-item { padding-right: 14px; } /* 사이트 항목 여백이 왼쪽 14px, 오른쪽 8px이라 맞춘다 */
+  /* 다운로드 토스트: 사이트의 .toast-text가 가운데 정렬 가로 배치라 진행 막대를 글자 아래로 쌓는다. */
   .cmx-dl-toast .toast-text { flex-direction: column; font-variant-numeric: tabular-nums; }
   .cmx-dl-progress { align-self: stretch; height: 4px; margin-top: 8px; }
-  .cmx-dl-progress .progress-bar { background-color: #1181f9; } /* the site's default bar is orange */
+  .cmx-dl-progress .progress-bar { background-color: #1181f9; } /* 사이트 기본 막대 색은 주황색 */
 
-  /* Speed panel: dark overlay like the player's own menus, laid out like YouTube's speed sheet. */
+  /* 배속 패널: 플레이어 메뉴 같은 어두운 바탕에 유튜브 배속 창 배치. */
   .video-js.cmx-speed .vjs-playback-rate .vjs-menu { display: none !important; }
   .cmx-speed-panel { position: absolute; right: 8px; bottom: 56px; z-index: 10; box-sizing: border-box;
     width: min(300px, calc(100% - 16px)); padding: 14px 16px 16px; border-radius: 16px;
@@ -29,7 +29,7 @@ css.textContent += `
   .cmx-speed-head b { font-size: 20px; font-weight: 700; }
   .cmx-speed-row { display: flex; align-items: center; gap: 10px; }
   .cmx-speed-row input { flex: 1; min-width: 0; accent-color: #1181f9; }
-  /* .video-js prefix: the site's own button reset would otherwise win on specificity. */
+  /* .video-js를 앞에 붙여야 사이트의 버튼 초기화 규칙보다 우선한다. */
   .video-js .cmx-speed-panel button { border: 0; border-radius: 999px; background: #2c2f32; color: #fff; font: inherit; cursor: pointer; }
   .video-js .cmx-speed-panel button:hover { background: #3d4146; }
   .cmx-speed-row button { flex: none; width: 30px; height: 30px; font-size: 18px; line-height: 1; }
@@ -37,8 +37,7 @@ css.textContent += `
   .cmx-speed-chips button { flex: 1; padding: 7px 0; font-size: 13px; }
   .video-js .cmx-speed-chips button.on { background: #1181f9; }
 
-  /* The site sizes control-bar icons with this variable (18px), which beats a width attribute;
-     22px makes ours match the font icons next to it. */
+  /* 사이트가 컨트롤바 아이콘 크기를 이 변수(18px)로 정해 width 속성이 무시된다. 22px이면 옆 아이콘과 맞다. */
   .cmx-pip { display: flex; align-items: center; justify-content: center; --csms-btn-icon-svg-size: 22px; }
   .cmx-pip svg { pointer-events: none; }
 `;
@@ -51,7 +50,7 @@ async function segmentUrls() {
   const setup = JSON.parse(document.querySelector('[data-setup-lazy]').dataset.setupLazy);
   let url = [].concat(setup.sources)[0].src;
   let text = await (await fetch(url)).text();
-  if (text.includes('#EXT-X-STREAM-INF')) { // master playlist: take the highest bandwidth variant
+  if (text.includes('#EXT-X-STREAM-INF')) { // 마스터 재생 목록이면 가장 높은 화질을 고른다
     const best = [...text.matchAll(/BANDWIDTH=(\d+)[^\n]*\n([^\n#]+)/g)].sort((a, b) => b[1] - a[1])[0];
     url = new URL(best[2].trim(), url).href;
     text = await (await fetch(url)).text();
@@ -63,14 +62,14 @@ async function segmentUrls() {
   };
 }
 
-// Yields segment bytes in order with a few requests in flight, until signal aborts.
+// 조각을 순서대로 넘긴다. 4개씩 미리 받아 두고, signal이 취소되면 멈춘다.
 async function* segments(urls, signal, onSegment) {
   const get = u => fetch(u, { signal }).then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`HTTP ${r.status}`))));
   const q = [];
   const want = i => {
     if (i >= urls.length) return;
-    const p = get(urls[i]).catch(e => (signal.aborted ? Promise.reject(e) : get(urls[i]))); // one retry per segment
-    p.catch(() => {}); // requests still in flight after a cancel must not log as unhandled
+    const p = get(urls[i]).catch(e => (signal.aborted ? Promise.reject(e) : get(urls[i]))); // 조각마다 한 번 재시도
+    p.catch(() => {}); // 취소 뒤 남은 요청이 처리 안 된 오류로 콘솔에 찍히지 않게
     q.push(p);
   };
   for (let i = 0; i < 4; i++) want(i);
@@ -83,8 +82,7 @@ async function* segments(urls, signal, onSegment) {
   }
 }
 
-// TS → fragmented MP4 without re-encoding. Remuxing keeps pace with the download, so progress
-// is segments received.
+// TS → 조각형 MP4(재인코딩 없음). 받는 속도에 맞춰 바뀌므로 진행도는 받은 조각 수다.
 async function toMp4(urls, signal, onProgress) {
   const parts = [];
   const tm = new muxjs.mp4.Transmuxer();
@@ -99,8 +97,8 @@ async function toMp4(urls, signal, onProgress) {
   return parts;
 }
 
-// ponytail: lectures are speech, so downmix to mono 96kbps; halves lamejs encode time
-// (~4 min for a 55 min lecture). Make channels/bitrate an option if music matters.
+// ponytail: 강의는 말소리라 모노 96kbps로 줄여 lamejs 인코딩 시간을 절반으로 줄인다.
+// 음악이 중요한 강의가 있으면 채널·비트레이트를 옵션으로 만든다.
 function mono(a) {
   const ch = Array.from({ length: a.numberOfChannels }, (_, c) => {
     const f = new Float32Array(a.numberOfFrames);
@@ -116,15 +114,15 @@ function mono(a) {
   return out;
 }
 
-// TS → AAC frames (mux.js) → PCM (WebCodecs) → MP3 (lamejs), one segment at a time.
-// The download finishes long before the encoding, so progress = seconds of audio encoded.
+// TS → AAC 프레임(mux.js) → PCM(WebCodecs) → MP3(lamejs), 조각 단위로 처리한다.
+// 받기가 인코딩보다 훨씬 먼저 끝나서 진행도는 인코딩한 오디오 길이로 잰다.
 async function toMp3(urls, seconds, signal, onProgress) {
   const parts = [];
   const ts = new muxjs.mp2t.TransportPacketStream();
   const adts = new muxjs.codecs.Adts();
   ts.pipe(new muxjs.mp2t.TransportParseStream()).pipe(new muxjs.mp2t.ElementaryStream()).pipe(adts);
   let enc, dec, time = 0;
-  // Closing the decoder drops its queue and makes the flush() below reject.
+  // 디코더를 닫으면 대기열이 버려지고 아래 flush()가 실패한다.
   signal.addEventListener('abort', () => dec && dec.state !== 'closed' && dec.close(), { once: true });
   adts.on('data', f => {
     if (!dec) {
@@ -136,7 +134,7 @@ async function toMp3(urls, seconds, signal, onProgress) {
           onProgress((a.timestamp + a.duration) / 1e6 / seconds);
           a.close();
         },
-        error: e => console.error(e), // a failed decoder also makes flush() below reject
+        error: e => console.error(e), // 디코더가 실패하면 아래 flush()도 실패한다
       });
       dec.configure({
         codec: 'mp4a.40.' + f.audioobjecttype,
@@ -156,8 +154,8 @@ async function toMp3(urls, seconds, signal, onProgress) {
   return parts;
 }
 
-// ponytail: the whole file is held as Blobs (Chrome pages large blobs to disk);
-// switch to showSaveFilePicker streaming if very long lectures run out of memory.
+// ponytail: 파일 전체를 Blob으로 들고 있다(크롬은 큰 Blob을 디스크로 넘긴다).
+// 아주 긴 강의에서 메모리가 모자라면 showSaveFilePicker 스트리밍으로 바꾼다.
 function save(parts, type, name) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(parts, { type }));
@@ -166,8 +164,7 @@ function save(parts, type, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
 }
 
-// mux.js + lamejs are ~270KB and this script now loads on every page, so they're injected
-// by background.js on demand instead of with the page.
+// mux.js·lamejs(약 270KB)는 모든 페이지에 싣지 않고, 다운로드할 때 background.js가 넣는다.
 async function loadLibs() {
   if (typeof muxjs !== 'undefined' && typeof lamejs !== 'undefined') return;
   if (!(await chrome.runtime.sendMessage({ loadLibs: true }))) throw new Error('변환 라이브러리를 불러오지 못했습니다.');
@@ -181,7 +178,7 @@ async function downloadVod(fmt) {
   if (!(await notice('vod', '강의 다운로드 안내', VOD_NOTICE))) return;
   busy = true;
   const ctl = new AbortController();
-  // Site toast + Bootstrap progress bar under the text, cancel button on the right.
+  // 사이트 토스트에 글자, 그 아래 Bootstrap 진행 막대, 오른쪽 취소 버튼.
   const t = toast('', 'guide', 0);
   t.classList.add('cmx-dl-toast');
   t.querySelector('.toast-text').innerHTML = `<span></span>
@@ -201,10 +198,10 @@ async function downloadVod(fmt) {
 
   let start, shown = -1;
   const progress = f => {
-    const p = Math.min(99, Math.floor(f * 100)); // 100% only once the file is saved
-    if (p === shown) return; // the MP3 encoder reports every ~20ms of audio
+    const p = Math.min(99, Math.floor(f * 100)); // 100%는 파일을 저장한 뒤에만
+    if (p === shown) return; // MP3 인코더는 오디오 약 20ms마다 알린다
     shown = p;
-    // Time left from the pace so far; skipped until there is enough to go on.
+    // 남은 시간은 지금까지의 속도로 계산하고, 2%가 넘기 전에는 보여 주지 않는다.
     const left = f > 0.02 && (((performance.now() - start) / 1000) * (1 - f)) / f;
     text.textContent = `${fmt.toUpperCase()} 파일을 만드는 중… ${p}%${left ? ` · ${timeLeft(left)} 남음` : ''} (이 탭을 닫지 마세요)`;
     bar.firstElementChild.style.width = `${p}%`;
@@ -227,8 +224,8 @@ async function downloadVod(fmt) {
   }
 }
 
-// The site's buttons get Bootstrap tooltips, but Bootstrap sets those up in the page before our
-// button exists. So build the same markup it produces (the site's CSS styles it) on hover/focus.
+// 사이트 버튼의 Bootstrap 툴팁은 우리 버튼이 생기기 전에 초기화된다. 그래서 Bootstrap이 만드는 것과
+// 같은 마크업을 마우스를 올리거나 포커스할 때 직접 만든다(모양은 사이트 CSS).
 function tooltip(el, text) {
   let tip;
   const show = () => {
@@ -239,13 +236,13 @@ function tooltip(el, text) {
     tip.dataset.popperPlacement = 'top';
     tip.innerHTML = '<div class="tooltip-arrow" style="position:absolute;left:0"></div><div class="tooltip-inner"></div>';
     tip.lastChild.textContent = text;
-    // Pin it to the page's corner first: unplaced, its width would stretch to the whole page.
+    // 먼저 페이지 왼쪽 위에 고정한다. 위치가 없으면 폭이 페이지 전체로 늘어난다.
     tip.style.cssText = 'position:absolute;inset:0 auto auto 0;margin:0';
     document.body.append(tip);
     const r = el.getBoundingClientRect(), w = tip.offsetWidth;
-    // Document coordinates, 6px above the button like Bootstrap's own offset.
+    // 문서 좌표 기준으로 Bootstrap처럼 버튼 6px 위에 둔다.
     tip.style.transform = `translate3d(${r.left + scrollX + (r.width - w) / 2}px,${r.top + scrollY - tip.offsetHeight - 6}px,0)`;
-    tip.firstChild.style.transform = `translate3d(${(w - 12.8) / 2}px,0,0)`; // 12.8px = arrow width
+    tip.firstChild.style.transform = `translate3d(${(w - 12.8) / 2}px,0,0)`; // 12.8px = 화살표 폭
     requestAnimationFrame(() => tip?.classList.add('show'));
   };
   const hide = () => {
@@ -281,8 +278,8 @@ function addDownloadMenu(box) {
 
 // 6. 강의 종료 알림 · 다음 영상 -----------------------------------------------------
 
-// Chrome only lets a page make sound after the user has clicked or typed on it; without that
-// the AudioContext stays suspended and logs a warning. The system notification still fires.
+// 크롬은 사용자가 페이지를 클릭하거나 입력한 뒤에만 소리를 허용한다. 그 전에는 소리 없이
+// 시스템 알림만 뜬다.
 function chime() {
   if (!navigator.userActivation.hasBeenActive) return;
   const ac = new AudioContext();
@@ -322,7 +319,7 @@ function goNext(href) {
   tick();
 }
 
-// The site's own "다음영상" button tells us where the next lecture is.
+// 다음 강의 주소는 사이트의 "다음영상" 버튼에서 읽는다.
 function onEnded() {
   const next = cfg.autoNext && document.querySelector('.right-container a[aria-label="다음영상"]')?.href;
   if (cfg.endNotify) {
@@ -335,15 +332,14 @@ function onEnded() {
 
 // 7. 다 들은 강의 배속 ---------------------------------------------------------------
 
-// The site caps the speed at the teacher's maximum even on finished lectures. For a lecture the
-// site itself marks complete (the flag that also unlocks free seeking) this adds a YouTube-style
-// panel: slider, -/+ and presets up to 4x. Lectures still counting toward progress keep the
-// site's own speed menu and limit untouched.
+// 사이트는 다 들은 강의도 교수가 정한 최대 배속으로 묶는다. 사이트가 완료로 표시한 강의(자유
+// 탐색이 풀리는 그 값)에만 유튜브식 패널(슬라이더, −/+, 프리셋, 최대 4배)을 붙이고, 진도가
+// 남은 강의는 사이트 배속 메뉴와 제한을 그대로 둔다.
 const SPEED_MAX = 4;
 const SPEED_PRESETS = [1, 1.25, 1.5, 2, 3];
 
-// Reads the site's own amd.progress(vodTag, isProgress, courseId, cmid, attempt, isComplete,
-// interval, maxPosition, beforeProgress, isRate, maxRate, …) call. Anything unexpected = no panel.
+// 사이트의 amd.progress(vodTag, isProgress, courseId, cmid, attempt, isComplete, interval,
+// maxPosition, beforeProgress, isRate, maxRate, …) 호출을 읽는다. 예상과 다르면 패널을 만들지 않는다.
 function siteRate() {
   for (const s of document.scripts) {
     const m = /amd\.progress\(([^)]*)\)/.exec(s.textContent);
@@ -357,7 +353,7 @@ async function addSpeedPanel(video) {
   const info = siteRate();
   const player = video.closest('.video-js');
   if (!info?.complete || !player) return;
-  // Without the page-side shim the site would pull the rate back, so stay within its own limit.
+  // 페이지 쪽 보정 코드를 못 넣으면 사이트가 배속을 되돌리므로 사이트 제한 안에서만 쓴다.
   const max = (await chrome.runtime.sendMessage({ rateShim: info.cap })) ? SPEED_MAX : info.cap;
 
   const panel = document.createElement('div');
@@ -378,11 +374,11 @@ async function addSpeedPanel(video) {
   const range = panel.querySelector('input');
   const set = r => { video.playbackRate = Math.min(max, Math.max(0.25, Math.round(r * 100) / 100)); };
   const sync = () => {
-    const r = video.playbackRate; // content scripts see the real rate, not the page's capped one
+    const r = video.playbackRate; // 콘텐츠 스크립트는 페이지가 보는 제한값이 아니라 실제 배속을 읽는다
     range.value = r;
     panel.querySelector('b').textContent = `${r.toFixed(2)}x`;
     panel.querySelectorAll('[data-rate]').forEach(b => b.classList.toggle('on', +b.dataset.rate === r));
-    // video.js writes its capped value to the button label on every change; ours runs after it.
+    // video.js가 바뀔 때마다 버튼 라벨에 제한값을 쓰는데, 이 처리가 그 뒤에 실행되어 덮어쓴다.
     const label = player.querySelector('.vjs-playback-rate-value');
     if (label) label.textContent = `${+r.toFixed(2)}x`;
   };
@@ -394,12 +390,12 @@ async function addSpeedPanel(video) {
     if (b) set(b.dataset.step ? video.playbackRate + +b.dataset.step : +b.dataset.rate);
   });
   range.addEventListener('input', () => set(+range.value));
-  // Arrow keys on the slider must not reach the player's seek/volume hotkeys.
+  // 슬라이더의 화살표 키가 플레이어의 탐색·볼륨 단축키로 가지 않게 한다.
   panel.addEventListener('keydown', e => {
     e.stopPropagation();
     if (e.key === 'Escape') panel.hidden = true;
   });
-  // The player's speed button opens this panel instead of its own menu.
+  // 플레이어의 배속 버튼을 누르면 사이트 메뉴 대신 이 패널을 연다.
   document.addEventListener('click', e => {
     if (player.contains(e.target) && e.target.closest('.vjs-playback-rate')) {
       e.stopPropagation();
@@ -410,11 +406,9 @@ async function addSpeedPanel(video) {
 
 // 8. 작은 창(PiP) -------------------------------------------------------------------
 
-// The site renders <video disablePictureInPicture> and hides video.js's own PiP button. Ours
-// clears that flag when pressed and opens the browser's PiP window. The progress code listens to
-// the <video>'s own events, which PiP doesn't change, so tracking carries on there. The watermark
-// is a DOM overlay, so a PiP window (video pixels only) does not show it. The user chose to keep
-// the button on watermarked lectures too: PiP is for watching.
+// 사이트는 <video disablePictureInPicture>로 PiP를 막고 video.js PiP 버튼도 숨긴다. 이 버튼은 누를
+// 때 그 설정을 풀고 PiP 창을 연다. 진도 기록은 <video> 이벤트를 따르므로 PiP에서도 이어진다.
+// 워터마크는 화면 위에 덮는 요소라 PiP 창에 안 보이지만, 감상용이라 워터마크 강의에도 둔다(사용자 결정).
 const PIP_SVG = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2.5" stroke="#fff" stroke-width="2"/><rect x="12" y="11.5" width="7" height="5.5" rx="1" fill="#fff"/></svg>';
 
 function addPipButton(fs) {
@@ -430,7 +424,7 @@ function addPipButton(fs) {
     video.disablePictureInPicture = false;
     try {
       await video.requestPictureInPicture();
-      // Put the site's setting back once the window closes.
+      // 창이 닫히면 사이트 설정을 되돌린다.
       video.addEventListener('leavepictureinpicture', () => (video.disablePictureInPicture = true), { once: true });
     } catch (e) {
       video.disablePictureInPicture = true;
@@ -441,22 +435,20 @@ function addPipButton(fs) {
   tooltip(b, '작은 창으로 보기');
 }
 
-// No URL check: we can't be sure every school serves lectures from /mod/vod/view.php, so the
-// features key off the lecture page's own elements (player, button row) where the site is on.
+// URL로 거르지 않는다. 모든 학교가 /mod/vod/view.php를 쓴다고 확신할 수 없어서, 강의 페이지의
+// 요소(플레이어, 버튼 줄)를 보고 붙인다.
 Promise.all([ready, parsed]).then(() => {
   if (!siteActive()) return;
-  // Outer container, not the inner .csms-flex-box, so the gap matches the ? button (8px, not 4px).
+  // 안쪽 .csms-flex-box가 아닌 바깥 상자에 넣어야 ? 버튼과의 간격(4px 아닌 8px)이 맞는다.
   if (cfg.vodDownload) onEach('.additional-info .right-container', addDownloadMenu);
-  // Always listen: onEnded reads endNotify/autoNext when the lecture ends, so both switches
-  // apply live (no refresh) even if they were off when the page loaded.
+  // 항상 듣는다. onEnded가 끝나는 순간 endNotify/autoNext를 읽으므로 두 스위치는 새로고침 없이 적용된다.
   onEach('video.vjs-tech', v => v.addEventListener('ended', onEnded));
   if (cfg.speedPanel) onEach('video.vjs-tech', addSpeedPanel);
   if (cfg.pipButton) onEach('.vjs-fullscreen-control', addPipButton);
   if (sessionStorage.cmxAutoplay) {
     sessionStorage.removeItem('cmxAutoplay');
-    // Chrome blocks autoplay with sound on a freshly loaded page, so start muted. Press the
-    // player's own play button rather than video.play(): only then does video.js (and the
-    // site's progress tracking hooked on it) see the play.
+    // 크롬은 새로 연 페이지에서 소리 있는 자동 재생을 막아서 음소거로 시작한다. video.play() 대신
+    // 플레이어 재생 버튼을 눌러야 video.js와 그에 걸린 사이트 진도 기록이 재생을 알아챈다.
     onEach('video.vjs-tech', v => {
       const go = () => {
         v.muted = true;
@@ -465,7 +457,7 @@ Promise.all([ready, parsed]).then(() => {
           ? '재생 버튼을 눌러 다음 영상을 시작하세요.'
           : '다음 영상을 음소거로 재생합니다. 플레이어의 음소거 버튼으로 소리를 켜세요.', 'guide', 6000), 2000);
       };
-      // Wait for metadata so the player is fully set up before we press its button.
+      // 플레이어 준비가 끝나도록 메타데이터를 기다린 뒤 버튼을 누른다.
       v.readyState ? go() : v.addEventListener('loadedmetadata', go, { once: true });
     });
   }

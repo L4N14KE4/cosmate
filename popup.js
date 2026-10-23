@@ -11,7 +11,7 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
   const isLms = url?.hostname === 'lms.inu.ac.kr';
 
   for (const box of document.querySelectorAll('input[type=checkbox]')) {
-    // The LMS setting is shared across LMS pages, including quiz attempts.
+    // 우클릭 외 스위치와 인천대 LMS에서의 우클릭 스위치는 전역 설정을 바로 바꾼다.
     if (box.name !== 'rightClick' || isLms) {
       box.checked = cfg[box.name];
       box.onchange = () => chrome.storage.local.set({ [box.name]: box.checked });
@@ -23,7 +23,7 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
       continue;
     }
 
-    // Other sites are enabled per origin, across pages on the current site.
+    // 다른 사이트의 우클릭 해제는 사이트(origin)별로 켜고, 그 사이트에 right-click.js를 등록한다.
     const origin = url.origin;
     const pattern = `${origin}/*`;
     const id = await siteScriptId(origin);
@@ -52,10 +52,10 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
   }
 });
 
-let staleTab = false; // set when the page doesn't answer (see the site block below)
+let staleTab = false; // 페이지가 응답하지 않으면 켜진다(아래 사이트 블록)
 
-// This site on/off: auto-detected Coursemos pages are on, everything else off; the user can
-// override either way. The content script knows the detection result, so ask the top frame.
+// 이 사이트 켜기/끄기: 감지된 코스모스 페이지는 켜지고 나머지는 꺼지며, 사용자가 어느 쪽으로든
+// 바꿀 수 있다. 감지 결과는 콘텐츠 스크립트가 알고 있어서 최상위 프레임에 묻는다.
 chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
   const section = document.getElementById('site');
   const status = document.getElementById('site-status');
@@ -63,9 +63,9 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
   const info = await chrome.tabs.sendMessage(tab.id, { cmx: 'status' }, { frameId: 0 }).catch(() => null);
   section.hidden = false;
   if (!info) {
-    staleTab = true; // this card already offers the refresh, so the bottom button stays hidden
-    // No answer: either the page can't run extensions (chrome://, the Web Store), or it was
-    // opened before the extension was last reloaded, which cuts it off until a refresh.
+    staleTab = true; // 이 카드에 새로고침 버튼이 있으니 하단 버튼은 숨긴다
+    // 응답 없음: 확장을 쓸 수 없는 페이지(chrome://, 웹 스토어)이거나, 확장을 새로고침하기 전에
+    // 열려서 새로고침할 때까지 연결이 끊긴 탭이다.
     const url = (() => { try { return new URL(tab.url); } catch {} })();
     const refreshable = /^https?:$/.test(url?.protocol) && !/(^|\.)chromewebstore\.google\.com$/.test(url.hostname);
     status.textContent = refreshable
@@ -83,8 +83,8 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
   }
 
   const { origin, detected, active } = info;
-  // Off for this site: the Coursemos features don't run here, so grey those groups out and make
-  // them inert. The right-click group stays usable: it also works on ordinary sites.
+  // 이 사이트가 꺼져 있으면 코스모스 기능이 돌지 않으므로 해당 묶음을 회색으로 만들고 조작을
+  // 막는다. 우클릭 묶음은 일반 사이트에서도 쓰므로 그대로 둔다.
   for (const group of document.querySelectorAll('.needs-site')) group.inert = !active;
   const { siteOverrides = {} } = await chrome.storage.local.get('siteOverrides');
   const forced = siteOverrides[origin];
@@ -95,7 +95,7 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
   button.textContent = active ? '이 사이트에서 끄기' : '이 사이트에서 켜기';
   button.hidden = false;
   button.onclick = async () => {
-    // Back to what auto-detection says = drop the override, so future detection changes apply.
+    // 자동 감지 결과로 돌아가는 경우에는 직접 설정을 지워서 이후 감지 결과가 반영되게 한다.
     if (!active === detected) delete siteOverrides[origin];
     else siteOverrides[origin] = active ? 'off' : 'on';
     await chrome.storage.local.set({ siteOverrides });
@@ -104,9 +104,8 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
   };
 });
 
-// Bottom refresh button. Four options only take effect after a page refresh (they insert or
-// replace page elements while loading); the rest apply immediately and never show it. It shows
-// while any of the six differs from how it was when the popup opened, so toggling back hides it.
+// 하단 새로고침 버튼. 아래 옵션은 페이지를 불러올 때 요소를 넣거나 바꾸므로 새로고침해야 적용되고,
+// 나머지는 바로 적용되어 버튼을 띄우지 않는다. 팝업을 열었을 때와 값이 다를 때만 보여서, 되돌리면 숨는다.
 const NEEDS_REFRESH = ['courseLink', 'fileButton', 'quizPrint', 'vodDownload', 'speedPanel', 'pipButton'];
 chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
   const cfg = await chrome.storage.local.get(DEFAULTS);

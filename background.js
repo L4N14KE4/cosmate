@@ -1,17 +1,16 @@
 chrome.runtime.onMessage.addListener((m, sender, sendResponse) => {
-  // Lecture download: inject mux.js + lamejs (~270KB) only when a download starts. They land in
-  // the same isolated world as our content scripts, so vod.js can use muxjs / lamejs directly.
+  // 강의 다운로드: mux.js·lamejs(약 270KB)를 다운로드를 시작할 때만 넣는다. 콘텐츠 스크립트와
+  // 같은 격리 환경에 들어가서 vod.js가 muxjs·lamejs를 바로 쓴다.
   if (m.loadLibs) {
     chrome.scripting.executeScript({
       target: { tabId: sender.tab.id, frameIds: [sender.frameId] },
       files: ['vendor/mux.min.js', 'vendor/lame.min.js'],
     }).then(() => sendResponse(true), () => sendResponse(false));
-    return true; // answer asynchronously
+    return true; // 비동기로 답한다
   }
 
-  // Speed panel: the site's player pulls the video's playbackRate back whenever it reads more than
-  // the teacher's maximum. That check lives in the page, so this runs there (MAIN world) and makes
-  // the video *report* at most `cap` while it really plays at the rate the panel set.
+  // 배속 패널: 사이트 플레이어는 교수 최대 배속보다 큰 값을 읽으면 되돌린다. 그 검사는 페이지 안에
+  // 있어서 페이지 환경(MAIN)에서 실행하고, 실제 배속은 둔 채 video가 cap 이하로 보고하게 한다.
   if (m.rateShim) {
     chrome.scripting.executeScript({
       target: { tabId: sender.tab.id, frameIds: [sender.frameId] },
@@ -34,7 +33,7 @@ chrome.runtime.onMessage.addListener((m, sender, sendResponse) => {
     return true;
   }
 
-  // 6. Lecture finished: system notification + toolbar badge on that tab.
+  // 6. 그 밖의 메시지는 강의 종료(vod.js의 onEnded): 시스템 알림과 그 탭의 툴바 배지.
   chrome.notifications.create({
     type: 'basic',
     iconUrl: 'cosmos-lxp-logo.png',
@@ -45,7 +44,7 @@ chrome.runtime.onMessage.addListener((m, sender, sendResponse) => {
   chrome.action.setBadgeText({ tabId: sender.tab.id, text: '완료' });
 });
 
-// Clear the badge once that tab loads another page.
+// 그 탭이 다른 페이지를 불러오면 배지를 지운다.
 chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (info.status === 'loading') chrome.action.setBadgeText({ tabId, text: '' });
 });
