@@ -1,4 +1,5 @@
-// Runs on /mod/vod/view.php after content.js (shares cfg, ready, onEach, toast, notice, css, DL_SVG).
+// Runs on every page (top frame) after content.js (shares cfg, ready, parsed, siteActive, onEach,
+// toast, notice, css, DL_SVG), but only does anything where the site is switched on.
 
 const VOD_NOTICE = `강의 다운로드는 개인 학습(복습) 목적으로만 사용해야 합니다.
 
@@ -11,6 +12,25 @@ css.textContent += `
   .cmx-vod-dl > summary { list-style: none; cursor: pointer; }
   .cmx-vod-dl > summary::-webkit-details-marker { display: none; }
   .cmx-vod-dl .dropdown-menu { position: absolute; top: calc(100% + 4px); right: 0; }
+
+  /* Speed panel: dark overlay like the player's own menus, laid out like YouTube's speed sheet. */
+  .video-js.cmx-speed .vjs-playback-rate .vjs-menu { display: none !important; }
+  .cmx-speed-panel { position: absolute; right: 8px; bottom: 56px; z-index: 10; box-sizing: border-box;
+    width: min(300px, calc(100% - 16px)); padding: 14px 16px 16px; border-radius: 16px;
+    background: rgba(0, 0, 0, .88); color: #fff; font-size: 14px; line-height: 1.4;
+    font-family: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+  .cmx-speed-panel[hidden] { display: none; }
+  .cmx-speed-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+  .cmx-speed-head b { font-size: 20px; font-weight: 700; }
+  .cmx-speed-row { display: flex; align-items: center; gap: 10px; }
+  .cmx-speed-row input { flex: 1; min-width: 0; accent-color: #1181f9; }
+  /* .video-js prefix: the site's own button reset would otherwise win on specificity. */
+  .video-js .cmx-speed-panel button { border: 0; border-radius: 999px; background: #2c2f32; color: #fff; font: inherit; cursor: pointer; }
+  .video-js .cmx-speed-panel button:hover { background: #3d4146; }
+  .cmx-speed-row button { flex: none; width: 30px; height: 30px; font-size: 18px; line-height: 1; }
+  .cmx-speed-chips { display: flex; gap: 6px; margin-top: 12px; }
+  .cmx-speed-chips button { flex: 1; padding: 7px 0; font-size: 13px; }
+  .video-js .cmx-speed-chips button.on { background: #1181f9; }
 `;
 
 const vodName = () => document.querySelector('a.vod-item-container.active .vod-info-title')?.textContent.trim() || document.title;
@@ -120,6 +140,13 @@ function save(parts, type, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
 }
 
+// mux.js + lamejs are ~270KB and this script now loads on every page, so they're injected
+// by background.js on demand instead of with the page.
+async function loadLibs() {
+  if (typeof muxjs !== 'undefined' && typeof lamejs !== 'undefined') return;
+  if (!(await chrome.runtime.sendMessage({ loadLibs: true }))) throw new Error('변환 라이브러리를 불러오지 못했습니다.');
+}
+
 let busy = false;
 async function downloadVod(fmt) {
   if (busy) return toast('이미 다운로드 중입니다.', 'warning');
@@ -128,6 +155,7 @@ async function downloadVod(fmt) {
   const t = toast('강의 정보를 불러오는 중…', 'guide', 0);
   const text = t.querySelector('.toast-text');
   try {
+    await loadLibs();
     const urls = await segmentUrls();
     const parts = await (fmt === 'mp4' ? toMp4 : toMp3)(urls, p => {
       text.textContent = `${fmt.toUpperCase()} 파일을 만드는 중… ${p}% (이 탭을 닫지 마세요)`;
@@ -213,10 +241,91 @@ function onEnded() {
   else if (cfg.endNotify) toast('강의 시청을 마쳤습니다.', 'success', 8000);
 }
 
-ready.then(() => {
+// 7. 다 들은 강의 배속 ---------------------------------------------------------------
+
+// The site caps the speed at the teacher's maximum even on finished lectures. For a lecture the
+// site itself marks complete (the flag that also unlocks free seeking) this adds a YouTube-style
+// panel: slider, -/+ and presets up to 4x. Lectures still counting toward progress keep the
+// site's own speed menu and limit untouched.
+const SPEED_MAX = 4;
+const SPEED_PRESETS = [1, 1.25, 1.5, 2, 3];
+
+// Reads the site's own amd.progress(vodTag, isProgress, courseId, cmid, attempt, isComplete,
+// interval, maxPosition, beforeProgress, isRate, maxRate, …) call. Anything unexpected = no panel.
+function siteRate() {
+  for (const s of document.scripts) {
+    const m = /amd\.progress\(([^)]*)\)/.exec(s.textContent);
+    if (!m) continue;
+    const a = m[1].split(',').map(x => x.trim().replace(/^"|"$/g, ''));
+    return { complete: a[5] === 'true', cap: a[9] === 'true' ? Number(a[10]) || 1 : 1 };
+  }
+}
+
+async function addSpeedPanel(video) {
+  const info = siteRate();
+  const player = video.closest('.video-js');
+  if (!info?.complete || !player) return;
+  // Without the page-side shim the site would pull the rate back, so stay within its own limit.
+  const max = (await chrome.runtime.sendMessage({ rateShim: info.cap })) ? SPEED_MAX : info.cap;
+
+  const panel = document.createElement('div');
+  panel.className = 'cmx-speed-panel';
+  panel.hidden = true;
+  panel.innerHTML = `
+    <div class="cmx-speed-head"><span>재생 속도</span><b></b></div>
+    <div class="cmx-speed-row">
+      <button type="button" data-step="-0.05" aria-label="느리게">−</button>
+      <input type="range" min="0.25" max="${max}" step="0.05" aria-label="재생 속도">
+      <button type="button" data-step="0.05" aria-label="빠르게">+</button>
+    </div>
+    <div class="cmx-speed-chips">${SPEED_PRESETS.filter(r => r <= max)
+      .map(r => `<button type="button" data-rate="${r}">${Number.isInteger(r) ? r.toFixed(1) : r}</button>`).join('')}</div>`;
+  player.append(panel);
+  player.classList.add('cmx-speed');
+
+  const range = panel.querySelector('input');
+  const set = r => { video.playbackRate = Math.min(max, Math.max(0.25, Math.round(r * 100) / 100)); };
+  const sync = () => {
+    const r = video.playbackRate; // content scripts see the real rate, not the page's capped one
+    range.value = r;
+    panel.querySelector('b').textContent = `${r.toFixed(2)}x`;
+    panel.querySelectorAll('[data-rate]').forEach(b => b.classList.toggle('on', +b.dataset.rate === r));
+    // video.js writes its capped value to the button label on every change; ours runs after it.
+    const label = player.querySelector('.vjs-playback-rate-value');
+    if (label) label.textContent = `${+r.toFixed(2)}x`;
+  };
+  video.addEventListener('ratechange', sync);
+  sync();
+
+  panel.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (b) set(b.dataset.step ? video.playbackRate + +b.dataset.step : +b.dataset.rate);
+  });
+  range.addEventListener('input', () => set(+range.value));
+  // Arrow keys on the slider must not reach the player's seek/volume hotkeys.
+  panel.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Escape') panel.hidden = true;
+  });
+  // The player's speed button opens this panel instead of its own menu.
+  document.addEventListener('click', e => {
+    if (player.contains(e.target) && e.target.closest('.vjs-playback-rate')) {
+      e.stopPropagation();
+      panel.hidden = !panel.hidden;
+    } else if (!panel.contains(e.target)) panel.hidden = true;
+  }, true);
+}
+
+// No URL check: we can't be sure every school serves lectures from /mod/vod/view.php, so the
+// features key off the lecture page's own elements (player, button row) where the site is on.
+Promise.all([ready, parsed]).then(() => {
+  if (!siteActive()) return;
   // Outer container, not the inner .csms-flex-box, so the gap matches the ? button (8px, not 4px).
   if (cfg.vodDownload) onEach('.additional-info .right-container', addDownloadMenu);
-  if (cfg.endNotify || cfg.autoNext) onEach('video.vjs-tech', v => v.addEventListener('ended', onEnded));
+  // Always listen: onEnded reads endNotify/autoNext when the lecture ends, so both switches
+  // apply live (no refresh) even if they were off when the page loaded.
+  onEach('video.vjs-tech', v => v.addEventListener('ended', onEnded));
+  if (cfg.speedPanel) onEach('video.vjs-tech', addSpeedPanel);
   if (sessionStorage.cmxAutoplay) {
     sessionStorage.removeItem('cmxAutoplay');
     // Chrome blocks autoplay with sound on a freshly loaded page, so start muted. Press the

@@ -1,23 +1,118 @@
 <!doctype html>
+<html lang="ko">
 <meta charset="utf-8">
 <title>코스모스 도우미</title>
 <style>
-  body { width: 300px; margin: 0; padding: 12px 16px; font: 13px/1.5 Pretendard, -apple-system, "Apple SD Gothic Neo", sans-serif; color: #2c2f32; }
-  h1 { margin: 0 0 4px; font-size: 15px; }
-  label { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid #eef0f2; }
-  .warn { display: none; margin: 0 0 8px; padding: 8px 10px; border-radius: 6px; background: #fdecec; color: #c62828; }
-  label:has([name=rightClick]:checked) + .warn { display: block; }
-  .note { margin: 8px 0 0; color: #899199; font-size: 12px; }
+  /* Colors, radii and type follow the LMS theme (--csms-* tokens read from lms.inu.ac.kr). The
+     switch / card / pill-button parts use Bootstrap's class names and look, without bundling it. */
+  :root {
+    --brand: #1181f9; --brand-hover: #0e6fd9; --brand-soft: #e0eefe; --brand-line: #c9e0fc; --brand-focus: rgba(17, 129, 249, .25);
+    --text: #161819; --text-2: #2c2f32; --gray: #899199;
+    --line: #e0e3e5; --line-soft: #eef0f2; --track: #d3d6d9; --bg: #f6f7f8;
+    --danger: #c62828; --danger-soft: #fdecec;
+  }
+  * { box-sizing: border-box; }
+  body { width: 360px; margin: 0; padding: 12px 14px 10px; background: var(--bg); color: var(--text-2);
+         font: 13px/1.45 "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", Helvetica, sans-serif; }
+
+  header { display: flex; align-items: center; gap: 8px; margin: 0 2px 6px; }
+  header img { width: 22px; height: 22px; border-radius: 6px; }
+  header h1 { margin: 0; font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: -.2px; }
+
+  /* This site on/off */
+  #site { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; padding: 10px 12px;
+          background: var(--brand-soft); border: 1px solid var(--brand-line); border-radius: 12px; }
+  #site[hidden] { display: none; }
+  #site p { margin: 0; font-size: 12.5px; font-weight: 500; color: var(--text-2); }
+  #site button, #apply { width: 100%; padding: 6px 14px; border: 0; border-radius: 80px; background: var(--brand); color: #fff;
+                 font: 600 12.5px/1.4 inherit; cursor: pointer; transition: background .15s; }
+  #site button[hidden], #apply[hidden] { display: none; }
+  #site button:hover, #apply:hover { background: var(--brand-hover); }
+  #site button:focus-visible, #apply:focus-visible { outline: 0; box-shadow: 0 0 0 3px var(--brand-focus); }
+  /* Bottom button: shown only after an option that needs a page refresh was changed. */
+  #apply { display: block; margin-top: 8px; padding: 8px 14px; font-size: 13px; }
+
+  /* One card per LMS screen. Its name sits in a pastel strip on the left, like the colored
+     bar on the LMS's own course list cards. */
+  .group { display: flex; margin-bottom: 4px; overflow: hidden; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+  .group h2 { display: flex; flex: none; align-items: center; justify-content: center; width: 52px; margin: 0; padding: 6px;
+              background: var(--tag, #d5e9fe); text-align: center; font-size: 12px; font-weight: 600; line-height: 1.35; color: var(--text-2); }
+  .rows { flex: 1; min-width: 0; }
+  /* Off for this site: the Coursemos features don't run here, so look disabled (popup.js sets `inert`). */
+  .needs-site { transition: opacity .15s, filter .15s; }
+  .needs-site[inert] { opacity: .45; filter: grayscale(1); }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 33px; padding: 6px 12px; cursor: pointer; transition: background .12s; }
+  .row + .row, .row + .warn { border-top: 1px solid var(--line-soft); }
+  .row:hover { background: #f8fbff; }
+  .row span { font-size: 13px; font-weight: 500; color: var(--text-2); }
+  .row small { display: block; margin-top: 1px; font-size: 11.5px; font-weight: 400; color: var(--gray); }
+
+  /* Bootstrap-style form switch */
+  .form-switch .form-check-input { position: relative; flex: none; width: 34px; height: 20px; margin: 0; appearance: none;
+         border-radius: 999px; background: var(--track); cursor: pointer; transition: background .15s; }
+  .form-switch .form-check-input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+         border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform .15s; }
+  .form-switch .form-check-input:checked { background: var(--brand); }
+  .form-switch .form-check-input:checked::after { transform: translateX(14px); }
+  .form-switch .form-check-input:focus-visible { outline: 0; box-shadow: 0 0 0 3px var(--brand-focus); }
+  .form-switch .form-check-input:disabled { opacity: .5; cursor: not-allowed; }
+
+  .warn { display: none; margin: 0; padding: 8px 12px; background: var(--danger-soft); color: var(--danger); font-size: 12px; font-weight: 500; }
+  .row:has([name=rightClick]:checked) + .warn { display: block; }
+
 </style>
-<h1>코스모스 도우미</h1>
-<label>이번 주 할 일: 과목명 눌러 과목으로 이동 <input type="checkbox" name="courseLink"></label>
-<label>파일 옆 다운로드 버튼 <input type="checkbox" name="fileButton"></label>
-<label>퀴즈 인쇄 버튼 <input type="checkbox" name="quizPrint"></label>
-<label>강의 다운로드 (MP4/MP3) <input type="checkbox" name="vodDownload"></label>
-<label>강의 종료 알림 (배지·소리) <input type="checkbox" name="endNotify"></label>
-<label>강의 종료 후 다음 영상으로 이동 <input type="checkbox" name="autoNext"></label>
-<label>우클릭·복사 차단 해제 <input type="checkbox" name="rightClick"></label>
-<p class="warn">현재 열려 있는 웹사이트의 모든 페이지에서 동작하며, 다른 웹사이트에는 적용되지 않습니다.</p>
-<p class="note">설정은 LMS 페이지를 새로고침하면 적용됩니다. (우클릭 해제는 바로 적용)</p>
+
+<header>
+  <img src="icon.png" alt="">
+  <h1>코스모스 도우미</h1>
+</header>
+
+<section id="site" hidden>
+  <p id="site-status"></p>
+  <button type="button" id="site-toggle" hidden></button>
+</section>
+
+<section class="group needs-site" style="--tag:#d5e9fe">
+  <h2>홈</h2>
+  <div class="rows">
+    <label class="row form-switch"><span>홈의 목록형 보기를 얇게</span><input class="form-check-input" type="checkbox" role="switch" name="compactList"></label>
+    <label class="row form-switch"><span>과목명을 눌러 과목으로 이동<small>이번 주 할 일에서</small></span><input class="form-check-input" type="checkbox" role="switch" name="courseLink"></label>
+  </div>
+</section>
+
+<section class="group needs-site" style="--tag:#caf5e1">
+  <h2>과목</h2>
+  <div class="rows">
+    <label class="row form-switch"><span>파일 옆에 다운로드 버튼</span><input class="form-check-input" type="checkbox" role="switch" name="fileButton"></label>
+    <label class="row form-switch"><span>모든 파일을 미리보기 형태로 열기<small>Ctrl/⌘를 누르고 클릭하면 다운로드</small></span><input class="form-check-input" type="checkbox" role="switch" name="previewFiles"></label>
+  </div>
+</section>
+
+<section class="group needs-site" style="--tag:#ffe1de">
+  <h2>영상</h2>
+  <div class="rows">
+    <label class="row form-switch"><span>강의 영상 다운로드 (MP4/MP3)</span><input class="form-check-input" type="checkbox" role="switch" name="vodDownload"></label>
+    <label class="row form-switch"><span>강의가 끝나면 알림 (배지·소리)</span><input class="form-check-input" type="checkbox" role="switch" name="endNotify"></label>
+    <label class="row form-switch"><span>강의가 끝나면 다음 영상으로 이동</span><input class="form-check-input" type="checkbox" role="switch" name="autoNext"></label>
+    <label class="row form-switch"><span>다 들은 강의는 최대 4배속까지</span><input class="form-check-input" type="checkbox" role="switch" name="speedPanel"></label>
+  </div>
+</section>
+
+<section class="group needs-site" style="--tag:#e9defa">
+  <h2>퀴즈</h2>
+  <div class="rows">
+    <label class="row form-switch"><span>답안검토에 인쇄 버튼</span><input class="form-check-input" type="checkbox" role="switch" name="quizPrint"></label>
+  </div>
+</section>
+
+<section class="group" style="--tag:#e0e3e5">
+  <h2>모든<br>화면</h2>
+  <div class="rows">
+    <label class="row form-switch"><span>우클릭·복사 차단 해제</span><input class="form-check-input" type="checkbox" role="switch" name="rightClick"></label>
+    <p class="warn">시험/퀴즈등에서는 사용하면 안됩니다.</p>
+  </div>
+</section>
+
+<button type="button" id="apply" hidden>새로고침하여 변경사항 적용</button>
 <script src="settings.js"></script>
 <script src="popup.js"></script>

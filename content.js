@@ -1,12 +1,15 @@
-// Runs on every lms.inu.ac.kr page at document_start. vod.js reuses the helpers below.
+// Runs on every page at document_start; features only wire up where the site is on (see
+// siteActive below). vod.js reuses the helpers below.
 let cfg = { ...DEFAULTS };
 const ready = chrome.storage.local.get(DEFAULTS).then(v => (cfg = v));
 chrome.storage.onChanged.addListener(ch => {
   for (const k in ch) cfg[k] = ch[k].newValue;
   syncUnlockCss();
+  syncCompact();
 });
 
 // LMS에서는 시험 응시와 답안검토를 포함한 모든 페이지에서 설정에 따라 우클릭·복사 차단을 해제한다.
+// The extension now runs at other schools' LMS too; this unlock stays on INU only.
 const unlock = () => cfg.rightClick
 
 // Our window capture listener runs before the site's handlers (e.g. the video player)
@@ -37,11 +40,35 @@ function syncUnlockCss() {
 }
 ready.then(syncUnlockCss);
 
+// Compact home list ("목록형"). The class goes on as soon as the settings are read so the big
+// list never flashes before the first paint; the CSS only matches the Coursemos home list, so it
+// is inert elsewhere. Once the page is parsed (see below) it is dropped again if the site is off.
+let pageParsed = false;
+function syncCompact() {
+  document.documentElement.classList.toggle('cmx-compact', cfg.compactList && (!pageParsed || siteActive()));
+}
+ready.then(syncCompact);
+
 const DL_SVG = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M11.9996 2.1001C12.4967 2.1001 12.8996 2.50304 12.8996 3.0001V14.8273L17.3632 10.3637C17.7147 10.0122 18.2845 10.0122 18.636 10.3637C18.9875 10.7152 18.9875 11.285 18.636 11.6365L12.636 17.6365C12.2845 17.988 11.7147 17.988 11.3632 17.6365L5.36321 11.6365C5.01174 11.285 5.01174 10.7152 5.36321 10.3637C5.71468 10.0122 6.28453 10.0122 6.63601 10.3637L11.0996 14.8273V3.0001C11.0996 2.50304 11.5026 2.1001 11.9996 2.1001ZM2.09961 21.0001C2.09961 20.503 2.50255 20.1001 2.99961 20.1001H20.9996C21.4967 20.1001 21.8996 20.503 21.8996 21.0001C21.8996 21.4972 21.4967 21.9001 20.9996 21.9001H2.99961C2.50255 21.9001 2.09961 21.4972 2.09961 21.0001Z" fill="#899199" class="svg-color"/></svg>';
 
 const css = document.createElement('style');
 css.textContent = `
   html.cmx-free * { -webkit-user-select: text !important; user-select: text !important; }
+  /* Thin rows for the home list view (105px -> 52px): title and tags on one line, smaller type.
+     !important because the site's own rules start with #page-content. Desktop widths only; the
+     site has its own stacked layout below 576px. */
+  @media (min-width: 576px) {
+    html.cmx-compact ul.course-lists-listview { gap: 6px !important; }
+    html.cmx-compact .course-list-item .course-thumbnail { width: 12px !important; }
+    html.cmx-compact .course-list-item .course-info { padding: 13px 20px 13px 14px !important; gap: 12px !important; }
+    html.cmx-compact .course-list-item .course-info-header { flex-direction: row !important; align-items: center !important; gap: 12px !important; padding-right: 0 !important; min-width: 0; }
+    html.cmx-compact .course-list-item .course-info-header > * { width: auto !important; }
+    html.cmx-compact .course-list-item .course-info-header h5 { order: -1; margin: 0 !important; font-size: 16px !important; line-height: 24px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    html.cmx-compact .course-list-item .course-semester-wrap { flex: none; flex-wrap: nowrap !important; --csms-label-font-size: 12px !important; font-size: 12px !important; }
+    html.cmx-compact .course-list-item .course-info-meta { width: 108px !important; }
+    html.cmx-compact .course-list-item .professors { --csms-label-font-size: 13px !important; font-size: 13px !important; }
+    html.cmx-compact .course-list-item .professors .csms-avata { --csms-avata-size: 24px; width: 24px; height: 24px; font-size: 13px !important; line-height: 24px !important; }
+  }
   .cmx-course-link { color: inherit; text-decoration: underline; }
   .cmx-course-link:hover { color: var(--csms-tx-semantic-info-primary); }
   .cmx-dl { flex: none; align-self: center; margin-left: 8px; border: 0; background: none; cursor: pointer; }
@@ -153,7 +180,41 @@ async function downloadUbfile(cmid) {
   }
 }
 
-ready.then(() => {
+// The extension runs on every site, so features only wire up where the site is switched on:
+// by the user's per-site choice (popup), else by auto-detection of the new Coursemos UI.
+// Detection ORs several signals so a school that changes one still matches. All of them are in
+// the server-rendered HTML, so the answer is the same at DOMContentLoaded and whenever the
+// popup asks. Measured on 107 saved LMS pages: none hit a non-Coursemos page, and none hit the
+// old `coursemosv2` theme except `ubion-courseware` / `csms-` on 2 of 33 (transitional pages).
+// Deliberately NOT used:
+//  - `/local/ubion` links: 27 of the 33 old-theme pages have them, and they'd switch the
+//    extension on for a layout it doesn't fit.
+//  - `<body class="coursemos-…">`: absent in the saved HTML, but old-theme pages (cyber.ewha.ac.kr)
+//    add it from JS after load, so it flags old layouts and shows up at unpredictable times.
+// The trailing slash in the theme path keeps `coursemosv2` out.
+const SIGNALS = [
+  'link[href*="/theme/styles.php/coursemos/"]', // theme stylesheet
+  'script[src*="ubion-courseware"]', // new-UI courseware bundle (not on every page)
+  '[class*="csms-"]', // new-UI component classes
+];
+const detected = () => SIGNALS.some(s => document.querySelector(s));
+const siteActive = () => {
+  const choice = cfg.siteOverrides[location.origin];
+  return choice ? choice === 'on' : detected();
+};
+const parsed = new Promise(r => (document.readyState === 'loading' ? addEventListener('DOMContentLoaded', r, { once: true }) : r()));
+Promise.all([ready, parsed]).then(() => {
+  pageParsed = true;
+  syncCompact();
+});
+
+// The popup asks the top frame about this site, to label its on/off switch.
+chrome.runtime.onMessage.addListener((m, sender, reply) => {
+  if (m.cmx === 'status') reply({ origin: location.origin, detected: detected(), active: siteActive() });
+});
+
+Promise.all([ready, parsed]).then(() => {
+  if (!siteActive()) return;
   // 1. 이번 주 할 일: course name links to the course.
   if (cfg.courseLink) {
     onEach('.current-activity button.grid-row-course', btn => {
@@ -203,6 +264,21 @@ ready.then(() => {
       a.after(d);
     });
   }
+
+  // 8. File cards: some files are "download mode" (the teacher's setting): the card link has no
+  // inline onclick and view.php redirects straight to the file, so a click downloads it. Open
+  // those in the document viewer popup instead, same call the site makes for "viewer mode"
+  // cards. Cmd/Ctrl/Shift/Alt+click keeps the site's behavior. cfg is read at click time, so
+  // the popup switch takes effect immediately.
+  document.addEventListener('click', e => {
+    if (!cfg.previewFiles || e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    const a = e.target.closest?.('li.modtype_ubfile a.activity-container-link');
+    if (!a || /window\.open/.test(a.getAttribute('onclick') || '')) return; // viewer mode: the site opens it
+    e.preventDefault();
+    e.stopPropagation();
+    open(`/mod/ubfile/viewer.php?id=${new URL(a.href).searchParams.get('id')}`, 'documentviewer',
+      'width=1005,height=1005,toolbar=no,location=no,menubar=no,copyhistory=no,status=no,directories=no,scrollbars=yes,resizable=1');
+  }, true);
 
   // 4. Quiz review printing — never during an exam attempt (no button, and Cmd+P keeps the
   // site's blank print). The secure-window quiz hides everything via `.quiz-secure-window *`,
