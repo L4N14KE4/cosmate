@@ -3,3 +3,6 @@
 
 # Packaged extension zips
 dist/
+
+# macOS
+.DS_Store
