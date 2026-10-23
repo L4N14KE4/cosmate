@@ -3,7 +3,7 @@
   "name": "코스모스 LXP 도우미",
   "version": "0.3.0",
   "description": "코스모스 LMS(신버전) 학습 보조 도구",
-  "icons": { "128": "icon.png" },
+  "icons": { "128": "cosmos-lxp-logo.png" },
   "action": { "default_popup": "popup.html" },
   "background": { "service_worker": "background.js" },
   "permissions": ["storage", "notifications", "activeTab", "scripting"],

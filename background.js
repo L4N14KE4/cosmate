@@ -37,7 +37,7 @@ chrome.runtime.onMessage.addListener((m, sender, sendResponse) => {
   // 6. Lecture finished: system notification + toolbar badge on that tab.
   chrome.notifications.create({
     type: 'basic',
-    iconUrl: 'icon.png',
+    iconUrl: 'cosmos-lxp-logo.png',
     title: '강의 시청 완료',
     message: m.next ? `${m.title}\n곧 다음 영상으로 이동합니다.` : m.title,
   });
