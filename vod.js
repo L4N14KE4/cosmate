@@ -24,7 +24,6 @@ css.textContent += `
     width: min(300px, calc(100% - 16px)); padding: 14px 16px 16px; border-radius: 16px;
     background: rgba(0, 0, 0, .88); color: #fff; font-size: 14px; line-height: 1.4;
     font-family: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
-  .cmx-speed-panel[hidden] { display: none; }
   .cmx-speed-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
   .cmx-speed-head b { font-size: 20px; font-weight: 700; }
   .cmx-speed-row { display: flex; align-items: center; gap: 10px; }
@@ -179,22 +178,16 @@ async function downloadVod(fmt) {
   busy = true;
   const ctl = new AbortController();
   // 사이트 토스트에 글자, 그 아래 Bootstrap 진행 막대, 오른쪽 취소 버튼.
-  const t = toast('', 'guide', 0);
+  const t = toast('', 'guide', 0, b => {
+    b.disabled = true;
+    ctl.abort();
+  });
   t.classList.add('cmx-dl-toast');
   t.querySelector('.toast-text').innerHTML = `<span></span>
     <div class="progress cmx-dl-progress" role="progressbar" aria-label="다운로드 진행도" aria-valuemin="0" aria-valuemax="100">
       <div class="progress-bar" style="width: 0%"></div></div>`;
   const [text, bar] = t.querySelectorAll('.toast-text span, .progress');
   text.textContent = '강의 정보를 불러오는 중…';
-  const cancel = document.createElement('button');
-  cancel.type = 'button';
-  cancel.className = 'btn btn-sm btn-secondary ms-3';
-  cancel.textContent = '취소';
-  cancel.onclick = () => {
-    cancel.disabled = true;
-    ctl.abort();
-  };
-  t.querySelector('.toast-body').append(cancel);
 
   let start, shown = -1;
   const progress = f => {
@@ -297,13 +290,11 @@ function chime() {
 }
 
 function goNext(href) {
-  const t = toast('', 'success', 0);
-  const cancel = document.createElement('button');
-  cancel.type = 'button';
-  cancel.className = 'btn btn-sm btn-secondary ms-3';
-  cancel.textContent = '취소';
-  t.querySelector('.toast-body').append(cancel);
   let n = 5, timer;
+  const t = toast('', 'success', 0, () => {
+    clearTimeout(timer);
+    t.remove();
+  });
   const tick = () => {
     if (!n) {
       sessionStorage.cmxAutoplay = '1';
@@ -311,10 +302,6 @@ function goNext(href) {
     }
     t.querySelector('.toast-text').textContent = `강의가 끝났습니다. ${n--}초 뒤 다음 영상으로 이동합니다.`;
     timer = setTimeout(tick, 1000);
-  };
-  cancel.onclick = () => {
-    clearTimeout(timer);
-    t.remove();
   };
   tick();
 }

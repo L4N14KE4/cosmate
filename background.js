@@ -44,6 +44,9 @@ chrome.runtime.onMessage.addListener((m, sender, sendResponse) => {
   chrome.action.setBadgeText({ tabId: sender.tab.id, text: '완료' });
 });
 
+// 예전 버전이 사이트별로 등록한 우클릭 스크립트(right-click.js)를 지운다. 이제 content.js가 맡는다.
+chrome.runtime.onInstalled.addListener(() => chrome.scripting.unregisterContentScripts());
+
 // 그 탭이 다른 페이지를 불러오면 배지를 지운다.
 chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (info.status === 'loading') chrome.action.setBadgeText({ tabId, text: '' });

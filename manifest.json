@@ -6,7 +6,7 @@
   "icons": { "128": "cosmos-lxp-logo.png" },
   "action": { "default_popup": "popup.html" },
   "background": { "service_worker": "background.js" },
-  "permissions": ["storage", "notifications", "activeTab", "scripting"],
+  "permissions": ["storage", "notifications", "scripting"],
   "host_permissions": ["*://*/*"],
   "content_scripts": [
     {

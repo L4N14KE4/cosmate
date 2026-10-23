@@ -8,9 +8,9 @@ chrome.storage.onChanged.addListener(ch => {
   syncCompact();
 });
 
-// 우클릭·복사 차단 해제. 전역 설정(cfg.rightClick)을 따르고, 이 스크립트는 모든 사이트에서
-// 돌기 때문에 켜 두면 퀴즈 응시·답안검토를 포함해 모든 사이트에 적용된다.
-const unlock = () => cfg.rightClick
+// 우클릭·복사 차단 해제. 전역 스위치(인천대 LMS 팝업)는 모든 사이트에, 사이트별 스위치(다른 사이트
+// 팝업, rightClickSites)는 그 사이트에만 적용되며 퀴즈 응시·답안검토 화면도 포함한다.
+const unlock = () => cfg.rightClick || cfg.rightClickSites.includes(location.origin);
 
 // window 캡처 단계에서 먼저 받아 사이트(동영상 플레이어 등)의 차단 처리로 넘기지 않는다.
 // 붙여넣기(paste)는 편집기가 동작하도록 건드리지 않는다.
@@ -87,10 +87,10 @@ function onEach(sel, fn) {
   run();
 }
 
-// 사이트 토스트(.csms-toast) 모양. ms = 0이면 직접 지울 때까지 남는다. 강의 화면은 사이트의 토스트
-// 상자를 쓰고, 없으면 상단 바 바로 아래에 만든다. 우리 <style>이 사이트 CSS보다 먼저 로드되어
-// .toast-container 규칙에 밀리므로 위치는 인라인으로 준다.
-function toast(msg, type = 'guide', ms = 4000) {
+// 사이트 토스트(.csms-toast) 모양. ms = 0이면 직접 지울 때까지 남고, onCancel을 주면 오른쪽에 취소
+// 버튼을 붙인다. 강의 화면은 사이트의 토스트 상자를 쓰고, 없으면 상단 바 바로 아래에 만든다.
+// 우리 <style>이 사이트 CSS보다 먼저 로드되어 .toast-container 규칙에 밀리므로 위치는 인라인으로 준다.
+function toast(msg, type = 'guide', ms = 4000, onCancel) {
   let box = document.querySelector('.csms-toast-container');
   if (!box) {
     box = document.createElement('div');
@@ -106,6 +106,14 @@ function toast(msg, type = 'guide', ms = 4000) {
   t.setAttribute('role', 'alert');
   t.innerHTML = '<div class="toast-body"><div class="toast-text"></div></div>';
   t.querySelector('.toast-text').textContent = msg;
+  if (onCancel) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn btn-sm btn-secondary ms-3';
+    b.textContent = '취소';
+    b.onclick = () => onCancel(b);
+    t.querySelector('.toast-body').append(b);
+  }
   box.append(t);
   if (ms) setTimeout(() => t.remove(), ms);
   return t;
@@ -189,10 +197,6 @@ const siteActive = () => {
   return choice ? choice === 'on' : detected();
 };
 const parsed = new Promise(r => (document.readyState === 'loading' ? addEventListener('DOMContentLoaded', r, { once: true }) : r()));
-Promise.all([ready, parsed]).then(() => {
-  pageParsed = true;
-  syncCompact();
-});
 
 // 팝업이 이 사이트의 켜짐/꺼짐을 표시하려고 최상위 프레임에 묻는다.
 chrome.runtime.onMessage.addListener((m, sender, reply) => {
@@ -200,6 +204,8 @@ chrome.runtime.onMessage.addListener((m, sender, reply) => {
 });
 
 Promise.all([ready, parsed]).then(() => {
+  pageParsed = true;
+  syncCompact();
   if (!siteActive()) return;
   // 1. 이번 주 할 일: 과목명을 과목 링크로 바꾼다.
   if (cfg.courseLink) {
@@ -299,7 +305,7 @@ Promise.all([ready, parsed]).then(() => {
     });
     addEventListener('afterprint', () => document.body.classList.toggle('quiz-secure-window', secure));
     css.textContent += `@media print {
-      #pw-nav, #pw-header, #pw-footer, #mod_quiz_navblock, .cmx-noprint { display: none !important; }
+      #pw-nav, #pw-header, #pw-footer, #mod_quiz_navblock { display: none !important; }
       #page { margin-left: 0 !important; }
       #page-content { padding-left: 0 !important; }
     }`;
