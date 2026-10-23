@@ -169,14 +169,48 @@ async function downloadVod(fmt) {
   }
 }
 
+// The site's buttons get Bootstrap tooltips, but Bootstrap sets those up in the page before our
+// button exists. So build the same markup it produces (the site's CSS styles it) on hover/focus.
+function tooltip(el, text) {
+  let tip;
+  const show = () => {
+    if (tip) return;
+    tip = document.createElement('div');
+    tip.className = 'tooltip bs-tooltip-auto fade';
+    tip.setAttribute('role', 'tooltip');
+    tip.dataset.popperPlacement = 'top';
+    tip.innerHTML = '<div class="tooltip-arrow" style="position:absolute;left:0"></div><div class="tooltip-inner"></div>';
+    tip.lastChild.textContent = text;
+    // Pin it to the page's corner first: unplaced, its width would stretch to the whole page.
+    tip.style.cssText = 'position:absolute;inset:0 auto auto 0;margin:0';
+    document.body.append(tip);
+    const r = el.getBoundingClientRect(), w = tip.offsetWidth;
+    // Document coordinates, 6px above the button like Bootstrap's own offset.
+    tip.style.transform = `translate3d(${r.left + scrollX + (r.width - w) / 2}px,${r.top + scrollY - tip.offsetHeight - 6}px,0)`;
+    tip.firstChild.style.transform = `translate3d(${(w - 12.8) / 2}px,0,0)`; // 12.8px = arrow width
+    requestAnimationFrame(() => tip?.classList.add('show'));
+  };
+  const hide = () => {
+    const old = tip;
+    tip = null;
+    old?.classList.remove('show');
+    setTimeout(() => old?.remove(), 150);
+  };
+  el.addEventListener('mouseenter', show);
+  el.addEventListener('focus', show);
+  el.addEventListener('mouseleave', hide);
+  el.addEventListener('blur', hide);
+}
+
 function addDownloadMenu(box) {
   const d = document.createElement('details');
   d.className = 'cmx-vod-dl';
-  d.innerHTML = `<summary class="btn-csms-svgicon-circle btn-csms-svgicon-circle-help" title="강의 다운로드" aria-label="강의 다운로드">${DL_SVG}</summary>
+  d.innerHTML = `<summary class="btn-csms-svgicon-circle btn-csms-svgicon-circle-help" aria-label="강의 다운로드">${DL_SVG}</summary>
     <div class="dropdown-menu dropdown-menu-end show">
       <button type="button" class="dropdown-item" data-fmt="mp4">동영상 (MP4)</button>
       <button type="button" class="dropdown-item" data-fmt="mp3">오디오 (MP3)</button>
     </div>`;
+  tooltip(d.querySelector('summary'), '강의 다운로드');
   d.querySelector('.dropdown-menu').addEventListener('click', e => {
     const fmt = e.target.closest('[data-fmt]')?.dataset.fmt;
     if (!fmt) return;
