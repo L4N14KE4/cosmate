@@ -106,8 +106,8 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
 
 // Bottom refresh button. Four options only take effect after a page refresh (they insert or
 // replace page elements while loading); the rest apply immediately and never show it. It shows
-// while any of the five differs from how it was when the popup opened, so toggling back hides it.
-const NEEDS_REFRESH = ['courseLink', 'fileButton', 'quizPrint', 'vodDownload', 'speedPanel'];
+// while any of the six differs from how it was when the popup opened, so toggling back hides it.
+const NEEDS_REFRESH = ['courseLink', 'fileButton', 'quizPrint', 'vodDownload', 'speedPanel', 'pipButton'];
 chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
   const cfg = await chrome.storage.local.get(DEFAULTS);
   const apply = document.getElementById('apply');

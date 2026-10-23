@@ -12,4 +12,5 @@ const DEFAULTS = {
   endNotify: true,
   autoNext: true,
   speedPanel: true,
+  pipButton: true,
 };

@@ -11,7 +11,12 @@ css.textContent += `
   .cmx-vod-dl { position: relative; }
   .cmx-vod-dl > summary { list-style: none; cursor: pointer; }
   .cmx-vod-dl > summary::-webkit-details-marker { display: none; }
-  .cmx-vod-dl .dropdown-menu { position: absolute; top: calc(100% + 4px); right: 0; }
+  .cmx-vod-dl .dropdown-menu { position: absolute; top: calc(100% + 4px); right: 0; min-width: 0; width: max-content; }
+  .cmx-vod-dl .dropdown-item { padding-right: 14px; } /* the site's item is 14px left, 8px right */
+  /* Download toast: the site's .toast-text is a centered flex row, so stack the bar under the text. */
+  .cmx-dl-toast .toast-text { flex-direction: column; font-variant-numeric: tabular-nums; }
+  .cmx-dl-progress { align-self: stretch; height: 4px; margin-top: 8px; }
+  .cmx-dl-progress .progress-bar { background-color: #1181f9; } /* the site's default bar is orange */
 
   /* Speed panel: dark overlay like the player's own menus, laid out like YouTube's speed sheet. */
   .video-js.cmx-speed .vjs-playback-rate .vjs-menu { display: none !important; }
@@ -31,6 +36,11 @@ css.textContent += `
   .cmx-speed-chips { display: flex; gap: 6px; margin-top: 12px; }
   .cmx-speed-chips button { flex: 1; padding: 7px 0; font-size: 13px; }
   .video-js .cmx-speed-chips button.on { background: #1181f9; }
+
+  /* The site sizes control-bar icons with this variable (18px), which beats a width attribute;
+     22px makes ours match the font icons next to it. */
+  .cmx-pip { display: flex; align-items: center; justify-content: center; --csms-btn-icon-svg-size: 22px; }
+  .cmx-pip svg { pointer-events: none; }
 `;
 
 const vodName = () => document.querySelector('a.vod-item-container.active .vod-info-title')?.textContent.trim() || document.title;
@@ -46,31 +56,43 @@ async function segmentUrls() {
     url = new URL(best[2].trim(), url).href;
     text = await (await fetch(url)).text();
   }
-  return text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#')).map(l => new URL(l, url).href);
+  const lines = text.split('\n').map(l => l.trim());
+  return {
+    urls: lines.filter(l => l && !l.startsWith('#')).map(l => new URL(l, url).href),
+    seconds: lines.reduce((s, l) => s + Number(/^#EXTINF:([\d.]+)/.exec(l)?.[1] ?? 0), 0),
+  };
 }
 
-// Yields segment bytes in order with a few requests in flight.
-async function* segments(urls, onProgress) {
-  const get = u => fetch(u).then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`HTTP ${r.status}`))));
+// Yields segment bytes in order with a few requests in flight, until signal aborts.
+async function* segments(urls, signal, onSegment) {
+  const get = u => fetch(u, { signal }).then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`HTTP ${r.status}`))));
   const q = [];
-  const want = i => i < urls.length && q.push(get(urls[i]).catch(() => get(urls[i]))); // one retry per segment
+  const want = i => {
+    if (i >= urls.length) return;
+    const p = get(urls[i]).catch(e => (signal.aborted ? Promise.reject(e) : get(urls[i]))); // one retry per segment
+    p.catch(() => {}); // requests still in flight after a cancel must not log as unhandled
+    q.push(p);
+  };
   for (let i = 0; i < 4; i++) want(i);
   for (let i = 0; i < urls.length; i++) {
     want(i + 4);
-    yield new Uint8Array(await q[i]);
-    onProgress(Math.floor(((i + 1) * 100) / urls.length));
+    const seg = new Uint8Array(await q[i]);
+    signal.throwIfAborted();
+    yield seg;
+    onSegment?.(i + 1);
   }
 }
 
-// TS → fragmented MP4 without re-encoding.
-async function toMp4(urls, onProgress) {
+// TS → fragmented MP4 without re-encoding. Remuxing keeps pace with the download, so progress
+// is segments received.
+async function toMp4(urls, signal, onProgress) {
   const parts = [];
   const tm = new muxjs.mp4.Transmuxer();
   tm.on('data', s => {
     if (!parts.length) parts.push(new Blob([s.initSegment]));
     parts.push(new Blob([s.data]));
   });
-  for await (const seg of segments(urls, onProgress)) {
+  for await (const seg of segments(urls, signal, n => onProgress(n / urls.length))) {
     tm.push(seg);
     tm.flush();
   }
@@ -95,12 +117,15 @@ function mono(a) {
 }
 
 // TS → AAC frames (mux.js) → PCM (WebCodecs) → MP3 (lamejs), one segment at a time.
-async function toMp3(urls, onProgress) {
+// The download finishes long before the encoding, so progress = seconds of audio encoded.
+async function toMp3(urls, seconds, signal, onProgress) {
   const parts = [];
   const ts = new muxjs.mp2t.TransportPacketStream();
   const adts = new muxjs.codecs.Adts();
   ts.pipe(new muxjs.mp2t.TransportParseStream()).pipe(new muxjs.mp2t.ElementaryStream()).pipe(adts);
   let enc, dec, time = 0;
+  // Closing the decoder drops its queue and makes the flush() below reject.
+  signal.addEventListener('abort', () => dec && dec.state !== 'closed' && dec.close(), { once: true });
   adts.on('data', f => {
     if (!dec) {
       const sfi = f.samplingfrequencyindex;
@@ -108,6 +133,7 @@ async function toMp3(urls, onProgress) {
       dec = new AudioDecoder({
         output: a => {
           parts.push(new Blob([enc.encodeBuffer(mono(a))]));
+          onProgress((a.timestamp + a.duration) / 1e6 / seconds);
           a.close();
         },
         error: e => console.error(e), // a failed decoder also makes flush() below reject
@@ -122,7 +148,7 @@ async function toMp3(urls, onProgress) {
     dec.decode(new EncodedAudioChunk({ type: 'key', timestamp: time, data: f.data }));
     time += (1024 * 1e6) / f.samplerate;
   });
-  for await (const seg of segments(urls, onProgress)) ts.push(seg);
+  for await (const seg of segments(urls, signal)) ts.push(seg);
   ts.flush();
   if (!dec) throw new Error('오디오 트랙을 찾지 못했습니다.');
   await dec.flush();
@@ -147,22 +173,54 @@ async function loadLibs() {
   if (!(await chrome.runtime.sendMessage({ loadLibs: true }))) throw new Error('변환 라이브러리를 불러오지 못했습니다.');
 }
 
+const timeLeft = s => (s < 60 ? `${Math.max(10, Math.ceil(s / 10) * 10)}초` : `약 ${Math.round(s / 60)}분`);
+
 let busy = false;
 async function downloadVod(fmt) {
   if (busy) return toast('이미 다운로드 중입니다.', 'warning');
   if (!(await notice('vod', '강의 다운로드 안내', VOD_NOTICE))) return;
   busy = true;
-  const t = toast('강의 정보를 불러오는 중…', 'guide', 0);
-  const text = t.querySelector('.toast-text');
+  const ctl = new AbortController();
+  // Site toast + Bootstrap progress bar under the text, cancel button on the right.
+  const t = toast('', 'guide', 0);
+  t.classList.add('cmx-dl-toast');
+  t.querySelector('.toast-text').innerHTML = `<span></span>
+    <div class="progress cmx-dl-progress" role="progressbar" aria-label="다운로드 진행도" aria-valuemin="0" aria-valuemax="100">
+      <div class="progress-bar" style="width: 0%"></div></div>`;
+  const [text, bar] = t.querySelectorAll('.toast-text span, .progress');
+  text.textContent = '강의 정보를 불러오는 중…';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'btn btn-sm btn-secondary ms-3';
+  cancel.textContent = '취소';
+  cancel.onclick = () => {
+    cancel.disabled = true;
+    ctl.abort();
+  };
+  t.querySelector('.toast-body').append(cancel);
+
+  let start, shown = -1;
+  const progress = f => {
+    const p = Math.min(99, Math.floor(f * 100)); // 100% only once the file is saved
+    if (p === shown) return; // the MP3 encoder reports every ~20ms of audio
+    shown = p;
+    // Time left from the pace so far; skipped until there is enough to go on.
+    const left = f > 0.02 && (((performance.now() - start) / 1000) * (1 - f)) / f;
+    text.textContent = `${fmt.toUpperCase()} 파일을 만드는 중… ${p}%${left ? ` · ${timeLeft(left)} 남음` : ''} (이 탭을 닫지 마세요)`;
+    bar.firstElementChild.style.width = `${p}%`;
+    bar.setAttribute('aria-valuenow', p);
+  };
   try {
     await loadLibs();
-    const urls = await segmentUrls();
-    const parts = await (fmt === 'mp4' ? toMp4 : toMp3)(urls, p => {
-      text.textContent = `${fmt.toUpperCase()} 파일을 만드는 중… ${p}% (이 탭을 닫지 마세요)`;
-    });
+    const { urls, seconds } = await segmentUrls();
+    ctl.signal.throwIfAborted();
+    start = performance.now();
+    progress(0);
+    const parts = await (fmt === 'mp4' ? toMp4(urls, ctl.signal, progress) : toMp3(urls, seconds, ctl.signal, progress));
     save(parts, fmt === 'mp4' ? 'video/mp4' : 'audio/mpeg', `${vodName().replace(/[\\/:*?"<>|]/g, '_')}.${fmt}`);
   } catch (e) {
-    toast(`다운로드에 실패했습니다: ${e.message}`, 'danger', 8000);
+    if (ctl.signal.aborted) toast('다운로드를 취소했습니다.', 'guide');
+    else toast(`다운로드에 실패했습니다: ${e.message}`, 'danger', 8000);
   } finally {
     t.remove();
     busy = false;
@@ -350,6 +408,39 @@ async function addSpeedPanel(video) {
   }, true);
 }
 
+// 8. 작은 창(PiP) -------------------------------------------------------------------
+
+// The site renders <video disablePictureInPicture> and hides video.js's own PiP button. Ours
+// clears that flag when pressed and opens the browser's PiP window. The progress code listens to
+// the <video>'s own events, which PiP doesn't change, so tracking carries on there. The watermark
+// is a DOM overlay, so a PiP window (video pixels only) does not show it. The user chose to keep
+// the button on watermarked lectures too: PiP is for watching.
+const PIP_SVG = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2.5" stroke="#fff" stroke-width="2"/><rect x="12" y="11.5" width="7" height="5.5" rx="1" fill="#fff"/></svg>';
+
+function addPipButton(fs) {
+  const video = fs.closest('.video-js')?.querySelector('video.vjs-tech');
+  if (!video || !document.pictureInPictureEnabled) return;
+  const b = document.createElement('button');
+  b.className = 'vjs-control vjs-button cmx-pip';
+  b.type = 'button';
+  b.setAttribute('aria-label', '작은 창으로 보기');
+  b.innerHTML = PIP_SVG;
+  b.onclick = async () => {
+    if (document.pictureInPictureElement === video) return document.exitPictureInPicture();
+    video.disablePictureInPicture = false;
+    try {
+      await video.requestPictureInPicture();
+      // Put the site's setting back once the window closes.
+      video.addEventListener('leavepictureinpicture', () => (video.disablePictureInPicture = true), { once: true });
+    } catch (e) {
+      video.disablePictureInPicture = true;
+      toast(`작은 창으로 열지 못했습니다: ${e.message}`, 'danger', 6000);
+    }
+  };
+  fs.before(b);
+  tooltip(b, '작은 창으로 보기');
+}
+
 // No URL check: we can't be sure every school serves lectures from /mod/vod/view.php, so the
 // features key off the lecture page's own elements (player, button row) where the site is on.
 Promise.all([ready, parsed]).then(() => {
@@ -360,6 +451,7 @@ Promise.all([ready, parsed]).then(() => {
   // apply live (no refresh) even if they were off when the page loaded.
   onEach('video.vjs-tech', v => v.addEventListener('ended', onEnded));
   if (cfg.speedPanel) onEach('video.vjs-tech', addSpeedPanel);
+  if (cfg.pipButton) onEach('.vjs-fullscreen-control', addPipButton);
   if (sessionStorage.cmxAutoplay) {
     sessionStorage.removeItem('cmxAutoplay');
     // Chrome blocks autoplay with sound on a freshly loaded page, so start muted. Press the

@@ -12,7 +12,7 @@
     --danger: #c62828; --danger-soft: #fdecec;
   }
   * { box-sizing: border-box; }
-  body { width: 360px; margin: 0; padding: 12px 14px 10px; background: var(--bg); color: var(--text-2);
+  body { width: 360px; margin: 0; padding: 10px 14px 8px; background: var(--bg); color: var(--text-2);
          font: 13px/1.45 "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", Helvetica, sans-serif; }
 
   header { display: flex; align-items: center; gap: 8px; margin: 0 2px 6px; }
@@ -30,7 +30,7 @@
   #site button:hover, #apply:hover { background: var(--brand-hover); }
   #site button:focus-visible, #apply:focus-visible { outline: 0; box-shadow: 0 0 0 3px var(--brand-focus); }
   /* Bottom button: shown only after an option that needs a page refresh was changed. */
-  #apply { display: block; margin-top: 8px; padding: 8px 14px; font-size: 13px; }
+  #apply { display: block; margin-top: 6px; padding: 8px 14px; font-size: 13px; }
 
   /* One card per LMS screen. Its name sits in a pastel strip on the left, like the colored
      bar on the LMS's own course list cards. */
@@ -41,7 +41,7 @@
   /* Off for this site: the Coursemos features don't run here, so look disabled (popup.js sets `inert`). */
   .needs-site { transition: opacity .15s, filter .15s; }
   .needs-site[inert] { opacity: .45; filter: grayscale(1); }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 33px; padding: 6px 12px; cursor: pointer; transition: background .12s; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; padding: 5px 12px; cursor: pointer; transition: background .12s; }
   .row + .row, .row + .warn { border-top: 1px solid var(--line-soft); }
   .row:hover { background: #f8fbff; }
   .row span { font-size: 13px; font-weight: 500; color: var(--text-2); }
@@ -95,6 +95,7 @@
     <label class="row form-switch"><span>강의가 끝나면 알림 (배지·소리)</span><input class="form-check-input" type="checkbox" role="switch" name="endNotify"></label>
     <label class="row form-switch"><span>강의가 끝나면 다음 영상으로 이동</span><input class="form-check-input" type="checkbox" role="switch" name="autoNext"></label>
     <label class="row form-switch"><span>다 들은 강의는 최대 4배속까지</span><input class="form-check-input" type="checkbox" role="switch" name="speedPanel"></label>
+    <label class="row form-switch"><span>작은 창(PiP)으로 보기 버튼</span><input class="form-check-input" type="checkbox" role="switch" name="pipButton"></label>
   </div>
 </section>
 
