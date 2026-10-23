@@ -1,2 +1,5 @@
 # Icon design source (Photoshop)
 *.psd
+
+# Packaged extension zips
+dist/
