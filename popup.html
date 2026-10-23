@@ -37,7 +37,9 @@
   .group { display: flex; margin-bottom: 4px; overflow: hidden; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
   .group h2 { display: flex; flex: none; align-items: center; justify-content: center; width: 52px; margin: 0; padding: 6px;
               background: var(--tag, #d5e9fe); text-align: center; font-size: 12px; font-weight: 600; line-height: 1.35; color: var(--text-2); }
-  .rows { flex: 1; min-width: 0; }
+  .rows { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+  /* A lone row fills a card made taller by a two-line strip ("모든 화면"), so it sits centered. */
+  .rows > .row { flex: 1 0 auto; }
   /* Off for this site: the Coursemos features don't run here, so look disabled (popup.js sets `inert`). */
   .needs-site { transition: opacity .15s, filter .15s; }
   .needs-site[inert] { opacity: .45; filter: grayscale(1); }
