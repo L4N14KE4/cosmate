@@ -268,10 +268,35 @@ Promise.all([ready, parsed]).then(() => {
   // 8. File cards: some files are "download mode" (the teacher's setting): the card link has no
   // inline onclick and view.php redirects straight to the file, so a click downloads it. Open
   // those in the document viewer popup instead, same call the site makes for "viewer mode"
-  // cards. Cmd/Ctrl/Shift/Alt+click keeps the site's behavior. cfg is read at click time, so
-  // the popup switch takes effect immediately.
+  // cards. Assignment/board PDF attachments (linked with ?forcedownload=1) open in a new tab, in
+  // the browser's PDF viewer. Cmd/Ctrl/Shift/Alt+click keeps the site's behavior. cfg is read at
+  // click time, so the popup switch takes effect immediately.
   document.addEventListener('click', e => {
     if (!cfg.previewFiles || e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    // Download icons (ours, the site's buttons) mean "download", so only plain file links.
+    const att = e.target.closest?.('#region-main a[href*="/pluginfile.php/"][href*="forcedownload=1"]:not(.cmx-dl):not([class*="btn"])');
+    if (att && /\.pdf$/i.test(new URL(att.href).pathname)) {
+      e.preventDefault();
+      e.stopPropagation();
+      const u = new URL(att.href);
+      u.searchParams.delete('forcedownload');
+      // Assignments: without the flag the server sends the file inline.
+      if (u.pathname.includes('/mod_assign/')) return open(u.href, '_blank', 'noopener');
+      // Boards send attachments as downloads either way, so fetch the PDF and open it from
+      // memory. The tab opens right away, while the click still allows pop-ups.
+      const w = open('', '_blank');
+      if (!w) return;
+      w.document.title = 'PDF를 불러오는 중…';
+      w.document.body.textContent = 'PDF를 불러오는 중…';
+      fetch(u.href)
+        .then(r => (r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`))))
+        .then(b => w.location.replace(URL.createObjectURL(new Blob([b], { type: 'application/pdf' }))))
+        .catch(err => {
+          w.close();
+          toast(`PDF를 열지 못했습니다: ${err.message}`, 'danger', 6000);
+        });
+      return;
+    }
     const a = e.target.closest?.('li.modtype_ubfile a.activity-container-link');
     if (!a || /window\.open/.test(a.getAttribute('onclick') || '')) return; // viewer mode: the site opens it
     e.preventDefault();
