@@ -40,14 +40,15 @@ chrome.runtime.onMessage.addListener((m, sender, sendResponse) => {
     title: '강의 시청 완료',
     message: m.next ? `${m.title}\n곧 다음 영상으로 이동합니다.` : m.title,
   });
-  chrome.action.setBadgeBackgroundColor({ tabId: target.tabId, color: '#1181F9' });
-  chrome.action.setBadgeText({ tabId: target.tabId, text: '완료' });
+  // 배지는 탭이 그새 닫히면 실패하므로 무시함.
+  chrome.action.setBadgeBackgroundColor({ tabId: target.tabId, color: '#1181F9' }).catch(() => {});
+  chrome.action.setBadgeText({ tabId: target.tabId, text: '완료' }).catch(() => {});
 });
 
 // 예전 버전이 사이트별로 등록한 우클릭 스크립트(right-click.js)를 지움. 지금은 콘텐츠 스크립트가 처리함.
 chrome.runtime.onInstalled.addListener(() => chrome.scripting.unregisterContentScripts());
 
-// 그 탭이 다른 페이지를 불러오면 배지를 지움.
+// 그 탭이 다른 페이지를 불러오면 배지를 지움. 불러오자마자 닫힌 탭(팝업 등)은 실패하므로 무시함.
 chrome.tabs.onUpdated.addListener((tabId, info) => {
-  if (info.status === 'loading') chrome.action.setBadgeText({ tabId, text: '' });
+  if (info.status === 'loading') chrome.action.setBadgeText({ tabId, text: '' }).catch(() => {});
 });
