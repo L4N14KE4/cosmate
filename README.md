@@ -42,6 +42,19 @@
 2. 크롬에서 `chrome://extensions`를 열고 오른쪽 위 **개발자 모드**를 켭니다.
 3. **압축해제된 확장 프로그램을 로드합니다**를 누르고 압축을 푼 폴더를 선택합니다.
 
+## 개발
+
+소스는 TypeScript(`src/`)이고 esbuild로 `js/`에 묶습니다.
+
+```bash
+npm install
+npm run build   # js/ 생성 (npm run watch로 저장할 때마다 다시 빌드)
+npm run check   # 타입 검사
+npm run zip     # 검사·빌드 후 dist/cosmate-v<버전>.zip 생성
+```
+
+빌드한 뒤 저장소 폴더를 **압축해제된 확장 프로그램**으로 불러오면 됩니다.
+
 ## 사용 시 주의사항
 
 > [!WARNING]

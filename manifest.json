@@ -5,20 +5,15 @@
   "description": "코스모스 LMS(신버전)용 비공식 학습 보조 도구",
   "icons": { "128": "cosmos-lxp-logo.png" },
   "action": { "default_popup": "popup.html" },
-  "background": { "service_worker": "background.js" },
+  "background": { "service_worker": "js/background.js" },
   "permissions": ["storage", "notifications", "scripting"],
   "host_permissions": ["*://*/*"],
   "content_scripts": [
     {
       "matches": ["*://*/*"],
-      "js": ["settings.js", "content.js"],
+      "js": ["js/content.js"],
       "run_at": "document_start",
       "all_frames": true
-    },
-    {
-      "matches": ["*://*/*"],
-      "js": ["vod.js"],
-      "run_at": "document_start"
     }
   ]
 }

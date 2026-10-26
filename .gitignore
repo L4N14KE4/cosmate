@@ -6,3 +6,7 @@ dist/
 
 # macOS
 .DS_Store
+
+# Build
+node_modules/
+js/
