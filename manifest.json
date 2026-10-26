@@ -17,7 +17,8 @@
     },
     {
       "matches": ["*://*/*"],
-      "js": ["vod.js"]
+      "js": ["vod.js"],
+      "run_at": "document_start"
     }
   ]
 }
