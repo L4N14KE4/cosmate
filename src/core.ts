@@ -447,12 +447,14 @@ Promise.all([ready, parsed]).then(() => {
 
   // 9. 과제·퀴즈 일정을 캘린더에 추가. 과제·퀴즈 화면은 정보 상자 제목 줄에, 과목 페이지의 과제·퀴즈
   // 카드는 날짜 줄(시작 ~ 종료) 끝에 붙임.
-  if (['/mod/assign/view.php', '/mod/quiz/view.php'].includes(location.pathname)) addCalendarButtons();
-  onEach(':is(li.modtype_assign, li.modtype_quiz) [data-region="activity-dates"]', dates => {
-    const li = dates.closest('li')!;
-    const url = li.querySelector<HTMLAnchorElement>('a.activity-container-link')?.href;
-    const wrap = url && calendarLinks(li.querySelector('.activityname')?.textContent?.trim() ?? '',
-      lmsTime(dates.querySelector('.timeopen')?.textContent), lmsTime(dates.querySelector('.timeclose')?.textContent), url, 'cmx-cal-link');
-    if (wrap) dates.append(wrap);
-  });
+  if (cfg.calendarLinks) {
+    if (['/mod/assign/view.php', '/mod/quiz/view.php'].includes(location.pathname)) addCalendarButtons();
+    onEach(':is(li.modtype_assign, li.modtype_quiz) [data-region="activity-dates"]', dates => {
+      const li = dates.closest('li')!;
+      const url = li.querySelector<HTMLAnchorElement>('a.activity-container-link')?.href;
+      const wrap = url && calendarLinks(li.querySelector('.activityname')?.textContent?.trim() ?? '',
+        lmsTime(dates.querySelector('.timeopen')?.textContent), lmsTime(dates.querySelector('.timeclose')?.textContent), url, 'cmx-cal-link');
+      if (wrap) dates.append(wrap);
+    });
+  }
 });

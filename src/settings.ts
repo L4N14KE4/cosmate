@@ -8,6 +8,7 @@ export const DEFAULTS = {
   siteOverrides: {} as Record<string, 'on' | 'off'>, // origin → 'on' | 'off': 자동 감지보다 우선하는 사용자의 사이트별 선택
   compactList: true,
   quizPrint: true,
+  calendarLinks: true,
   vodDownload: true,
   endNotify: true,
   autoNext: true,
