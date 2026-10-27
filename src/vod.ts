@@ -393,6 +393,38 @@ function addPipButton(fs: Element) {
   tooltip(b, '작은 창으로 보기');
 }
 
+// 지금 장면을 원본 해상도 PNG로 저장하는 컨트롤바 버튼(다운로드 스위치에 묶음). 영상 픽셀만 그리므로
+// 화면 위에 덮는 워터마크는 들어가지 않음(PiP·영상 다운로드와 같음). 파일 이름에 영상 시각을 붙임.
+const SHOT_SVG = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h2l1.5-2h6l1.5 2h2A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5v-9Z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" stroke="#fff" stroke-width="2"/></svg>';
+
+function addCaptureButton(fs: Element) {
+  const video = fs.closest('.video-js')?.querySelector<HTMLVideoElement>('video.vjs-tech');
+  if (!video) return;
+  const b = document.createElement('button');
+  b.className = 'vjs-control vjs-button cmx-shot';
+  b.type = 'button';
+  b.setAttribute('aria-label', '지금 장면 저장');
+  b.innerHTML = SHOT_SVG;
+  b.onclick = async () => {
+    if (!video.videoWidth) return toast('영상을 재생한 뒤에 저장할 수 있습니다.', 'warning');
+    if (!(await notice('vod', '강의 다운로드 안내', VOD_NOTICE))) return;
+    const t = Math.floor(video.currentTime);
+    const c = document.createElement('canvas');
+    c.width = video.videoWidth;
+    c.height = video.videoHeight;
+    try {
+      c.getContext('2d')!.drawImage(video, 0, 0);
+      const png = await new Promise<Blob | null>(r => c.toBlob(r)); // 영상이 다른 출처로 막혀 있으면 여기서 오류
+      if (!png) throw new Error('이미지를 만들지 못했습니다.');
+      save([png], 'image/png', `${vodName().replace(/[\\/:*?"<>|]/g, '_')} ${Math.floor(t / 60)}분 ${t % 60}초.png`);
+    } catch (e) {
+      toast(`장면을 저장하지 못했습니다: ${(e as Error).message}`, 'danger', 6000);
+    }
+  };
+  fs.before(b);
+  tooltip(b, '지금 장면 저장');
+}
+
 // URL로 거르지 않음. 모든 학교가 /mod/vod/view.php를 쓴다고 확신할 수 없어서, 강의 페이지의
 // 요소(플레이어, 버튼 줄)를 보고 붙이도록 구현함.
 export function initVod() {
@@ -426,8 +458,8 @@ export function initVod() {
     .video-js .cmx-speed-chips button.on { background: #1181f9; }
 
     /* 사이트가 컨트롤바 아이콘 크기를 이 변수(18px)로 정해 width 속성이 무시됨. 22px이면 옆 아이콘과 맞음. */
-    .cmx-pip { display: flex; align-items: center; justify-content: center; --csms-btn-icon-svg-size: 22px; }
-    .cmx-pip svg { pointer-events: none; }
+    .cmx-pip, .cmx-shot { display: flex; align-items: center; justify-content: center; --csms-btn-icon-svg-size: 22px; }
+    .cmx-pip svg, .cmx-shot svg { pointer-events: none; }
   `;
 
   Promise.all([ready, parsed]).then(() => {
@@ -437,6 +469,8 @@ export function initVod() {
     // 항상 듣도록 구현함. onEnded가 끝나는 순간 endNotify/autoNext를 읽으므로 두 스위치는 새로고침 없이 적용됨.
     onEach<HTMLVideoElement>('video.vjs-tech', v => v.addEventListener('ended', onEnded));
     if (cfg.speedPanel) onEach<HTMLVideoElement>('video.vjs-tech', addSpeedPanel);
+    // 둘 다 전체 화면 버튼 앞에 넣으므로 이 순서면 [장면 저장][PiP][전체 화면]이 됨.
+    if (cfg.vodDownload) onEach('.vjs-fullscreen-control', addCaptureButton);
     if (cfg.pipButton) onEach('.vjs-fullscreen-control', addPipButton);
     if (sessionStorage.cmxAutoplay) {
       sessionStorage.removeItem('cmxAutoplay');
