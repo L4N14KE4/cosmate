@@ -77,6 +77,11 @@ css.textContent = `
   .cmx-dlall:hover { background: #f6f7f8; }
   .cmx-dlall:disabled { opacity: .6; cursor: default; }
   .cmx-dlall svg { width: 16px; height: 16px; }
+  .cmx-cal { display: flex; gap: 8px; margin-left: auto; }
+  /* 과목 카드 날짜 줄: "시작 전" 같은 날짜 칩(.csms-chips-date)처럼 작은 밑줄 글씨로 표시함. */
+  .activity-dates > .cmx-cal { margin-left: 8px; }
+  .cmx-cal-link { color: inherit; font-weight: 500; text-decoration: underline; }
+  .cmx-cal-link:hover { color: var(--csms-tx-semantic-info-primary); }
   .cmx-toast { pointer-events: auto; }
   dialog.cmx-dialog { position: fixed; inset: 0; display: none; width: min(480px, calc(100% - 32px)); height: fit-content; margin: auto; padding: 0; border: 0; background: none; box-shadow: none; overflow: visible; }
   dialog.cmx-dialog[open] { display: block; }
@@ -215,6 +220,74 @@ async function downloadAll(cmids: string[]) {
   } finally {
     t.remove();
   }
+}
+
+// "2026-10-14 23:59:00" 꼴의 첫 시각. 없거나 "기간 제한 없음"이면 undefined.
+// ponytail: 화면의 시각을 브라우저 시간대로 읽음. LMS 프로필 시간대가 다르면 어긋남.
+function lmsTime(s?: string | null) {
+  const m = s?.match(/\d{4}-\d\d-\d\d \d\d:\d\d(:\d\d)?/);
+  return m ? new Date(m[0].replace(' ', 'T')) : undefined;
+}
+
+// 활동 하나의 "구글 캘린더에 추가"·".ics 저장" 링크 묶음(.cmx-cal)을 만듦. 종료가 남았으면 종료 시각에
+// 마감 일정(하루 안에 끝나는 기간은 시작~종료 일정), 종료 없이 시작만 남았으면 시작 시각에 시작 일정을
+// 만들고, 둘 다 지났으면 undefined. url은 활동 화면 주소이고 일정 설명에 넣음.
+function calendarLinks(name: string, open: Date | undefined, close: Date | undefined, url: string, linkClass: string) {
+  const now = new Date();
+  let from: Date, to: Date, what: string;
+  if (close && close > now) {
+    if (open && close.getTime() - open.getTime() <= 864e5) [from, to, what] = [open, close, ''];
+    else [from, to, what] = [close, close, ' 마감'];
+  } else if (!close && open && open > now) [from, to, what] = [open, open, ' 시작'];
+  else return;
+
+  const title = `${name}${what} (${document.title.split(' | ')[0].replace(/\s*\(\d+\)$/, '')})`; // 강좌명 끝의 강좌 번호는 뺌
+  const at = (d: Date) => d.toISOString().replace(/[-:]|\.\d+/g, ''); // 20261126T145900Z
+  const esc = (s: string) => s.replace(/[\\;,]/g, '\\$&').replace(/\r?\n/g, '\\n');
+  // 한 줄은 75바이트 이하여야 해서 18글자(글자당 최대 4바이트)마다 접음.
+  const fold = (l: string) => l.match(/.{1,18}/gu)!.join('\r\n ');
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Cosmate//KO', 'METHOD:PUBLISH', 'BEGIN:VEVENT',
+    `UID:cmx-${new URL(url).searchParams.get('id')}@${location.host}`, `DTSTAMP:${at(now)}`, `DTSTART:${at(from)}`, `DTEND:${at(to)}`,
+    `SUMMARY:${esc(title)}`, `DESCRIPTION:${esc(url)}`, 'END:VEVENT', 'END:VCALENDAR'];
+  const google = new URL('https://calendar.google.com/calendar/render?action=TEMPLATE');
+  google.searchParams.set('text', title);
+  google.searchParams.set('dates', `${at(from)}/${at(to)}`);
+  google.searchParams.set('details', url);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'cmx-cal';
+  wrap.innerHTML = `<a class="${linkClass}" target="_blank" rel="noopener">구글 캘린더에 추가</a><a class="${linkClass}">.ics 저장</a>`;
+  const [g, f] = wrap.querySelectorAll('a');
+  g.href = google.href;
+  f.href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics.map(fold).join('\r\n'));
+  f.download = `${name}${what}.ics`;
+  wrap.addEventListener('click', e => e.stopPropagation()); // 과목 카드 안에서는 카드의 클릭 처리로 넘기지 않음
+  return wrap;
+}
+
+// 과제·퀴즈 화면에 캘린더 링크를 붙임. 시각은 정보 상자(과제 정보의 종료 일시, 시험 정보의 시험 기간)에서
+// 읽고, 과제에 그 상자가 없으면(종료 없이 시작만 있는 과제 등) 브레드크럼의 주차 페이지에서 그 활동 카드의
+// 시작·종료 시각을 읽음.
+async function addCalendarButtons() {
+  const find = (label: string) => [...document.querySelectorAll('.csms-box .cml-item')].find(li => li.querySelector('.cml-label')?.textContent?.trim() === label);
+  const text = (li: Element) => li.querySelector('.cml-text')?.textContent;
+  const due = find('종료 일시'), period = find('시험 기간');
+  let open: Date | undefined, close: Date | undefined;
+  if (due) close = lmsTime(text(due));
+  else if (period) [open, close] = (text(period) ?? '').split('~').map(lmsTime);
+  else {
+    const section = [...document.querySelectorAll<HTMLAnchorElement>('.breadcrumb a[href*="/course/view.php"]')].at(-1)?.href;
+    if (!section) return;
+    const page = new DOMParser().parseFromString(await (await fetch(section)).text(), 'text/html');
+    const dates = page.querySelector(`#module-${new URLSearchParams(location.search).get('id')} [data-region="activity-dates"]`);
+    open = lmsTime(dates?.querySelector('.timeopen')?.textContent);
+    close = lmsTime(dates?.querySelector('.timeclose')?.textContent);
+  }
+  const name = document.querySelector('.breadcrumb li:last-child')?.textContent?.trim() ?? '';
+  const wrap = calendarLinks(name, open, close, location.href, 'btn btn-secondary btn-sm');
+  // 정보 상자가 없으면 화면의 첫 상자(설명) 제목 줄에 붙임.
+  const box = (due ?? period)?.closest('.csms-box') ?? document.querySelector('#region-main .csms-box-header')?.closest('.csms-box');
+  if (wrap) box?.querySelector('.csms-box-header')?.append(wrap);
 }
 
 // 사이트 켜짐 판단: 팝업에서 고른 사이트별 설정이 우선이고, 없으면 신버전 코스모스 화면을 자동
@@ -371,4 +444,15 @@ Promise.all([ready, parsed]).then(() => {
       nav.append(b);
     });
   }
+
+  // 9. 과제·퀴즈 일정을 캘린더에 추가. 과제·퀴즈 화면은 정보 상자 제목 줄에, 과목 페이지의 과제·퀴즈
+  // 카드는 날짜 줄(시작 ~ 종료) 끝에 붙임.
+  if (['/mod/assign/view.php', '/mod/quiz/view.php'].includes(location.pathname)) addCalendarButtons();
+  onEach(':is(li.modtype_assign, li.modtype_quiz) [data-region="activity-dates"]', dates => {
+    const li = dates.closest('li')!;
+    const url = li.querySelector<HTMLAnchorElement>('a.activity-container-link')?.href;
+    const wrap = url && calendarLinks(li.querySelector('.activityname')?.textContent?.trim() ?? '',
+      lmsTime(dates.querySelector('.timeopen')?.textContent), lmsTime(dates.querySelector('.timeclose')?.textContent), url, 'cmx-cal-link');
+    if (wrap) dates.append(wrap);
+  });
 });
