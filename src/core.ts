@@ -71,6 +71,12 @@ css.textContent = `
   .cmx-dl { flex: none; align-self: center; margin-left: 8px; border: 0; background: none; cursor: pointer; }
   .activity-item:has(> .cmx-dl) { position: relative; padding-right: 56px; }
   .activity-item > .cmx-dl { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); margin: 0; }
+  /* 주차 기간 알약(.section-period-text)과 같은 모양. 사이트 규칙이 그 클래스 안의 svg를 1px 폭으로 줄여서 클래스를 따로 씀. */
+  .cmx-dlall { display: flex; flex: none; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--csms-bo-hierarchy-secondary, #e0e3e5); border-radius: 999px;
+               background: none; color: inherit; font-family: inherit; font-size: 14px; font-weight: 500; line-height: 21px; white-space: nowrap; cursor: pointer; }
+  .cmx-dlall:hover { background: #f6f7f8; }
+  .cmx-dlall:disabled { opacity: .6; cursor: default; }
+  .cmx-dlall svg { width: 16px; height: 16px; }
   .cmx-toast { pointer-events: auto; }
   dialog.cmx-dialog { position: fixed; inset: 0; display: none; width: min(480px, calc(100% - 32px)); height: fit-content; margin: auto; padding: 0; border: 0; background: none; box-shadow: none; overflow: visible; }
   dialog.cmx-dialog[open] { display: block; }
@@ -168,16 +174,42 @@ async function fileInfo(cmid: string): Promise<{ code: string | number; file_dow
   throw new Error('파일 변환이 끝나지 않았습니다. 잠시 후 다시 시도하세요.');
 }
 
+// 파일 하나를 받음. 교수님이 다운로드를 막아 둔 파일이면 false.
+async function saveUbfile(cmid: string) {
+  const j = await fileInfo(cmid);
+  if (j.file_download !== '1' || !j.file_url) return false;
+  fetch(`/mod/ubfile/view.php?id=${cmid}`); // 원래 흐름처럼 view.php를 방문해 열람 기록을 남김
+  const a = document.createElement('a');
+  a.href = j.file_url;
+  a.download = '';
+  a.click();
+  return true;
+}
+
 async function downloadUbfile(cmid: string) {
   const t = toast('파일을 준비하고 있습니다…', 'guide', 0);
   try {
-    const j = await fileInfo(cmid);
-    if (j.file_download !== '1' || !j.file_url) return toast('교수님이 다운로드를 허용하지 않은 파일입니다.', 'warning');
-    fetch(`/mod/ubfile/view.php?id=${cmid}`); // 원래 흐름처럼 view.php를 방문해 열람 기록을 남김
-    const a = document.createElement('a');
-    a.href = j.file_url;
-    a.download = '';
-    a.click();
+    if (!(await saveUbfile(cmid))) toast('교수님이 다운로드를 허용하지 않은 파일입니다.', 'warning');
+  } catch (e) {
+    toast((e as Error).message, 'danger');
+  } finally {
+    t.remove();
+  }
+}
+
+// 주차의 파일을 차례로 받음. 두 번째 파일부터 크롬이 "여러 파일 다운로드" 허용을 한 번 물어봄.
+async function downloadAll(cmids: string[]) {
+  const t = toast('', 'guide', 0);
+  const text = t.querySelector('.toast-text')!;
+  let blocked = 0;
+  try {
+    for (const [i, id] of cmids.entries()) {
+      text.textContent = `파일을 준비하고 있습니다… (${i + 1}/${cmids.length})`;
+      if (!(await saveUbfile(id))) blocked++;
+    }
+    toast(blocked
+      ? `${cmids.length - blocked}개 다운로드를 시작했습니다. ${blocked}개는 교수님이 다운로드를 허용하지 않은 파일입니다.`
+      : `파일 ${cmids.length}개 다운로드를 시작했습니다.`, blocked ? 'warning' : 'guide');
   } catch (e) {
     toast((e as Error).message, 'danger');
   } finally {
@@ -243,6 +275,22 @@ Promise.all([ready, parsed]).then(() => {
     };
     onEach('li.modtype_ubfile .activity-item', item => {
       addUbfileButton(item, item.closest('li')!.id.replace('module-', ''), true);
+    });
+    // 주차 기간 알약 옆에 그 주차(하위 차시 포함)의 파일을 모두 받는 버튼. 파일이 2개 이상인 주차에만 붙임.
+    onEach('.ubformat > li.section > .section-item > .course-section-header .section-period-text', period => {
+      const ids = [...period.closest('li.section')!.querySelectorAll('li.modtype_ubfile')].map(li => li.id.replace('module-', ''));
+      if (ids.length < 2) return;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cmx-dlall';
+      b.innerHTML = DL_SVG;
+      b.append(`파일 ${ids.length}개 모두 받기`);
+      b.onclick = async () => {
+        b.disabled = true;
+        await downloadAll(ids);
+        b.disabled = false;
+      };
+      period.after(b);
     });
     onEach<HTMLAnchorElement>('.current-activity a.cell-activity-link[href*="/mod/ubfile/view.php"]', a => {
       addUbfileButton(a, new URL(a.href).searchParams.get('id')!);
