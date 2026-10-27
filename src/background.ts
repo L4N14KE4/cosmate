@@ -48,6 +48,12 @@ chrome.runtime.onMessage.addListener((m, sender, sendResponse) => {
 // 예전 버전이 사이트별로 등록한 우클릭 스크립트(right-click.js)를 지움. 지금은 콘텐츠 스크립트가 처리함.
 chrome.runtime.onInstalled.addListener(() => chrome.scripting.unregisterContentScripts());
 
+// 처음 설치했을 때만 시작 안내 페이지를 엶. 업데이트·확장 새로고침 때는 열지 않음.
+// 서비스 워커가 js/ 안에 있어 상대 경로 대신 절대 주소로 지정함.
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  if (reason === 'install') chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
+});
+
 // 그 탭이 다른 페이지를 불러오면 배지를 지움. 불러오자마자 닫힌 탭(팝업 등)은 실패하므로 무시함.
 chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (info.status === 'loading') chrome.action.setBadgeText({ tabId, text: '' }).catch(() => {});

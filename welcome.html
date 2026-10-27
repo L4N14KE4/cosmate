@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<title>Cosmate 시작하기</title>
+<style>
+  /* 처음 설치했을 때 한 번 여는 안내 페이지. 색·모서리는 팝업과 같은 LMS 테마 값을 씀. */
+  :root { --brand: #1181f9; --brand-soft: #e0eefe; --text: #161819; --text-2: #2c2f32; --gray: #899199; --line: #e0e3e5; --line-soft: #eef0f2; --bg: #f6f7f8; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 48px 16px; background: var(--bg); color: var(--text-2);
+         font: 14px/1.6 "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", Helvetica, sans-serif; word-break: keep-all; }
+  main { max-width: 560px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 14px; margin: 0 4px 8px; }
+  header img { width: 48px; height: 48px; border-radius: 12px; }
+  h1 { margin: 0; font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: -.3px; }
+  header p { margin: 2px 0 0; color: var(--gray); }
+  h2 { margin: 24px 4px 8px; font-size: 13px; font-weight: 600; color: var(--gray); }
+  .box { background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+  .row { display: flex; gap: 14px; padding: 14px 18px; }
+  .row + .row { border-top: 1px solid var(--line-soft); }
+  .row b { display: block; color: var(--text); font-weight: 600; }
+  .row p { margin: 2px 0 0; }
+  .num { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--brand-soft); color: var(--brand);
+         font-size: 13px; font-weight: 700; line-height: 24px; text-align: center; }
+  .where { flex: none; width: 96px; color: var(--text); font-weight: 600; }
+  .where + p { margin: 0; }
+  .ico { width: 18px; height: 18px; margin: 0 2px; vertical-align: -4px; }
+  footer { margin: 16px 4px 0; font-size: 12.5px; color: var(--gray); }
+</style>
+
+<main>
+  <header>
+    <img src="cosmos-lxp-logo.png" alt="">
+    <div>
+      <h1>Cosmate를 설치했어요</h1>
+      <p>코스모스 LMS를 조금 더 편하게 쓰도록 돕는 비공식 확장 프로그램이에요.</p>
+    </div>
+  </header>
+
+  <h2>시작하기</h2>
+  <div class="box">
+    <div class="row"><span class="num">1</span><div>
+      <b>툴바에 고정하기</b>
+      <p>주소창 오른쪽
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="확장 프로그램"><path d="M4 7h3a1 1 0 0 0 1 -1v-1a2 2 0 0 1 4 0v1a1 1 0 0 0 1 1h3a1 1 0 0 1 1 1v3a1 1 0 0 0 1 1h1a2 2 0 0 1 0 4h-1a1 1 0 0 0 -1 1v3a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-1a2 2 0 0 0 -4 0v1a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1h1a2 2 0 0 0 0 -4h-1a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1"/></svg>
+        확장 프로그램 버튼을 누르고, Cosmate 옆
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="고정"><path d="M15 4.5l-4 4l-4 1.5l-1.5 1.5l7 7l1.5 -1.5l1.5 -4l4 -4"/><path d="M9 15l-4.5 4.5"/><path d="M14.5 4l5.5 5.5"/></svg>
+        고정 버튼을 누르세요. 고정한 아이콘에서 기능을 하나씩 켜고 끌 수 있어요.</p>
+    </div></div>
+    <div class="row"><span class="num">2</span><div>
+      <b>열려 있던 LMS 탭 새로고침</b>
+      <p>설치하기 전에 열어 둔 탭에는 기능이 붙지 않아요.</p>
+    </div></div>
+  </div>
+
+  <h2>이런 곳에 나타나요</h2>
+  <div class="box">
+    <div class="row"><span class="where">홈</span><p>목록형 보기를 얇게, 이번 주 할 일의 과목명을 링크로</p></div>
+    <div class="row"><span class="where">과목 주차 목록</span><p>파일 옆 다운로드, 주차별 모두 받기, 과제·퀴즈를 캘린더에 추가</p></div>
+    <div class="row"><span class="where">강의 영상</span><p>MP4·MP3 저장, 장면 저장, 작은 창(PiP), 다 들은 강의 4배속, 끝나면 알림과 다음 영상</p></div>
+    <div class="row"><span class="where">퀴즈 답안검토</span><p>인쇄 버튼</p></div>
+  </div>
+
+  <footer>학교나 코스모스(유비온)와 관계없는 개인 프로젝트예요. 저장한 강의와 자료는 개인 복습용으로만 써 주세요.</footer>
+</main>

@@ -5,7 +5,7 @@
     "build": "esbuild src/content.ts src/popup.ts src/background.ts --bundle --outdir=js --target=chrome120",
     "watch": "npm run build -- --watch",
     "check": "tsc --noEmit",
-    "zip": "npm run check && npm run build && zip -X -r dist/cosmate-v$(node -p \"require('./manifest.json').version\").zip manifest.json popup.html cosmos-lxp-logo.png LICENSE vendor js"
+    "zip": "npm run check && npm run build && zip -X -r dist/cosmate-v$(node -p \"require('./manifest.json').version\").zip manifest.json popup.html welcome.html cosmos-lxp-logo.png LICENSE vendor js"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.6",
