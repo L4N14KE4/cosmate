@@ -182,6 +182,7 @@ async function downloadVod(fmt: 'mp4' | 'mp3') {
     if (ctl.signal.aborted) toast('다운로드를 취소했습니다.', 'guide');
     else toast(`다운로드에 실패했습니다: ${(e as Error).message}`, 'danger', 8000);
   } finally {
+    ctl.abort(); // 실패했을 때 미리 받던 조각 요청과 오디오 디코더를 정리함
     t.remove();
     busy = false;
   }

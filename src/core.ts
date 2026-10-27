@@ -172,7 +172,10 @@ async function fileInfo(cmid: string): Promise<{ code: string | number; file_dow
       method: 'POST',
       body: new URLSearchParams({ id: cmid, tp: 'm', pg: 'ubfile' }),
     })).text();
-    const j = JSON.parse(t.slice(t.indexOf('{"code"'))); // 첫 호출 앞에 PHP 경고가 붙을 수 있음
+    const at = t.indexOf('{"code"'); // 첫 호출 앞에 PHP 경고가 붙을 수 있음
+    // 로그인이 풀리면 JSON 대신 로그인 화면이 옴
+    if (at < 0) throw new Error('파일 정보를 받지 못했습니다. 로그인이 풀렸을 수 있으니 페이지를 새로고침한 뒤 다시 시도하세요.');
+    const j = JSON.parse(t.slice(at));
     if (!String(j.code).startsWith('2')) return j; // 2xx = 아직 변환 중
     await new Promise(r => setTimeout(r, 2000));
   }
