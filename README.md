@@ -11,7 +11,7 @@
 
 팝업에서 기능마다 켜고 끌 수 있습니다.
 
-<p align="center"><img src="docs/popup.png" width="360" alt="Cosmate 팝업 화면"></p>
+<p align="center"><img src="docs/popup.png" width="280" alt="Cosmate 팝업 화면"></p>
 
 **홈**
 - 홈의 목록형 보기를 얇게 표시
