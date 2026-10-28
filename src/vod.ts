@@ -333,10 +333,11 @@ function siteRate() {
   for (const s of document.scripts) {
     const m = /amd\.progress\(([^)]*)\)/.exec(s.textContent || '');
     if (!m) continue;
-    const a = m[1].split(',').map(x => x.trim().replace(/^"|"$/g, ''));
-    // 사이트가 참을 강의마다 true 또는 1로 넘김(예: 16987의 완료 값은 true, 127155는 1).
-    const on = (x: string) => x === 'true' || x === '1';
-    return { complete: on(a[5]), cap: on(a[9]) ? Number(a[10]) || 1 : 1 };
+    // Moodle은 인자를 하나씩 json_encode해 이어 붙임. 참 값은 강의마다 true나 1로 오고(16987은 true,
+    // 127155는 1), 사이트는 if (!isComplete)·isRate && …처럼 참인지만 보므로 똑같이 !!로 판단함.
+    let a: unknown[];
+    try { a = JSON.parse(`[${m[1]}]`); } catch { return; }
+    return { complete: !!a[5], cap: a[9] ? Number(a[10]) || 1 : 1 };
   }
 }
 
