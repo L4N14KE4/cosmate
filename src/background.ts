@@ -36,7 +36,7 @@ chrome.runtime.onMessage.addListener((m, sender, sendResponse) => {
   // 6. 그 밖의 메시지는 강의 종료(vod.ts의 onEnded)로 처리함: 시스템 알림과 그 탭의 툴바 배지.
   chrome.notifications.create({
     type: 'basic',
-    iconUrl: chrome.runtime.getURL('cosmos-lxp-logo.png'), // 서비스 워커가 js/ 안에 있어 상대 경로 대신 절대 주소로 지정함
+    iconUrl: chrome.runtime.getURL('assets/icon.png'), // 서비스 워커가 js/ 안에 있어 상대 경로 대신 절대 주소로 지정함
     title: '강의 시청 완료',
     message: m.next ? `${m.title}\n곧 다음 영상으로 이동합니다.` : m.title,
   });
@@ -51,7 +51,7 @@ chrome.runtime.onInstalled.addListener(() => chrome.scripting.unregisterContentS
 // 처음 설치했을 때만 시작 안내 페이지를 엶. 업데이트·확장 새로고침 때는 열지 않음.
 // 서비스 워커가 js/ 안에 있어 상대 경로 대신 절대 주소로 지정함.
 chrome.runtime.onInstalled.addListener(({ reason }) => {
-  if (reason === 'install') chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
+  if (reason === 'install') chrome.tabs.create({ url: chrome.runtime.getURL('pages/welcome.html') });
 });
 
 // 그 탭이 다른 페이지를 불러오면 배지를 지움. 불러오자마자 닫힌 탭(팝업 등)은 실패하므로 무시함.

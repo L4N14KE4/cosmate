@@ -1,6 +1,9 @@
 # Icon design source (Photoshop)
 *.psd
 
+# Design sources, Photoshop scripts and store listing drafts
+design/
+
 # Packaged extension zips
 dist/
 
