@@ -17,8 +17,10 @@
 
   /* 제목 줄: 로고·이름, 오른쪽에 이 사이트 켜기/끄기 스위치. 이 사이트 상태는 그 아래 줄에 둠. */
   header { display: flex; align-items: center; gap: 10px; margin: 0 2px; }
-  header img { width: 28px; height: 28px; border-radius: 8px; }
-  h1 { flex: 1; margin: 0; font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -.2px; }
+  header > img { width: 28px; height: 28px; border-radius: 8px; }
+  /* 제목은 Degular Bold를 윤곽선으로 바꾼 wordmark.svg(Adobe Fonts 글꼴 파일은 확장에 넣을 수 없음). */
+  h1 { flex: 1; margin: 0; line-height: 0; }
+  h1 img { height: 15px; }
   #site-status { margin: 4px 4px 0; font-size: 12px; color: var(--gray); }
   #site-status:empty { display: none; }
   .site { display: flex; flex: none; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; cursor: pointer; }
@@ -74,7 +76,7 @@
 
 <header>
   <img src="cosmos-lxp-logo.png" alt="">
-  <h1>Cosmate</h1>
+  <h1><img src="wordmark.svg" alt="Cosmate"></h1>
   <label class="site form-switch" hidden>이 사이트<input class="form-check-input" type="checkbox" role="switch" id="site-toggle"></label>
 </header>
 <p id="site-status"></p>
