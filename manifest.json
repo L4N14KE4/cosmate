@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cosmate: 코스모스 LXP(LMS) 비공식 학습 보조 도구",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "코스모스 LMS(신버전)용 비공식 학습 보조 도구",
   "icons": { "128": "cosmos-lxp-logo.png" },
   "action": { "default_popup": "popup.html" },
