@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Cosmate: 코스모스 LXP(LMS) 비공식 학습 보조 도구",
   "version": "0.1.2",
-  "description": "코스모스 LMS(신버전)용 비공식 학습 보조 도구",
+  "description": "코스모스 LXP(신버전) LMS용 비공식 학습 보조 도구. 주차별 파일 받기, 과제 마감 캘린더 추가, 강의 저장·배속·PiP 등을 지원합니다.",
   "icons": { "128": "cosmos-lxp-logo.png" },
   "action": { "default_popup": "popup.html" },
   "background": { "service_worker": "js/background.js" },
