@@ -3,7 +3,12 @@
 import { DEFAULTS, type Settings } from './settings';
 
 export let cfg: Settings = { ...DEFAULTS };
-export const ready = chrome.storage.local.get(DEFAULTS).then(v => (cfg = v as Settings));
+// 이 페이지를 불러올 때 읽은 설정. cfg는 저장값을 따라 바뀌므로, 팝업은 새로고침해야 적용되는 옵션을 이 값과 비교함.
+let loaded: Settings = DEFAULTS;
+export const ready = chrome.storage.local.get(DEFAULTS).then(v => {
+  cfg = v as Settings;
+  loaded = { ...cfg };
+});
 chrome.storage.onChanged.addListener(ch => {
   for (const k in ch) (cfg as Record<string, unknown>)[k] = ch[k].newValue;
   syncUnlockCss();
@@ -308,9 +313,9 @@ export const siteActive = () => {
 };
 export const parsed = new Promise<void>(r => (document.readyState === 'loading' ? addEventListener('DOMContentLoaded', () => r(), { once: true }) : r()));
 
-// 팝업이 이 사이트의 켜짐/꺼짐을 표시하려고 최상위 프레임에 물어봄.
+// 팝업이 이 사이트의 켜짐/꺼짐과 이 페이지를 불러올 때의 설정을 알려고 최상위 프레임에 물어봄.
 chrome.runtime.onMessage.addListener((m, sender, reply) => {
-  if (m.cmx === 'status') reply({ origin: location.origin, detected: detected(), active: siteActive() });
+  if (m.cmx === 'status') reply({ origin: location.origin, detected: detected(), active: siteActive(), loaded });
 });
 
 Promise.all([ready, parsed]).then(() => {
@@ -387,12 +392,19 @@ Promise.all([ready, parsed]).then(() => {
   // 보기형 카드에 쓰는 것과 같은 뷰어 팝업으로 열고, 과제·게시판 PDF 첨부파일(?forcedownload=1)은
   // 새 탭의 브라우저 PDF 뷰어로 엶. Ctrl/Cmd/Shift/Alt+클릭은 사이트 동작 그대로 둠.
   // 설정은 클릭할 때 읽으므로 팝업 스위치가 바로 적용됨.
+  // 다운로드 아이콘(.cmx-dl, 사이트 버튼)은 그대로 두고 파일 링크만 바꿈.
+  const ATT = '#region-main a[href*="/pluginfile.php/"][href*="forcedownload=1"]:not(.cmx-dl):not([class*="btn"])';
+  const isPdf = (a: HTMLAnchorElement) => /\.pdf$/i.test(new URL(a.href).pathname);
+  // PDF가 아닌 첨부파일은 마우스를 올리면 바로 다운로드되는 이유를 툴팁으로 알려 줌.
+  document.addEventListener('mouseover', e => {
+    const att = (e.target as Element).closest?.<HTMLAnchorElement>(ATT);
+    if (att && !isPdf(att)) att.title = cfg.previewFiles ? '미리보기는 PDF만 돼요.' : '';
+  });
   document.addEventListener('click', e => {
     if (!cfg.previewFiles || e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
     const target = e.target as Element;
-    // 다운로드 아이콘(.cmx-dl, 사이트 버튼)은 그대로 두고 파일 링크만 바꿈.
-    const att = target.closest?.<HTMLAnchorElement>('#region-main a[href*="/pluginfile.php/"][href*="forcedownload=1"]:not(.cmx-dl):not([class*="btn"])');
-    if (att && /\.pdf$/i.test(new URL(att.href).pathname)) {
+    const att = target.closest?.<HTMLAnchorElement>(ATT);
+    if (att && isPdf(att)) {
       e.preventDefault();
       e.stopPropagation();
       const u = new URL(att.href);

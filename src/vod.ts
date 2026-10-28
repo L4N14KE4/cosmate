@@ -51,12 +51,43 @@ async function* segments(urls: string[], signal: AbortSignal, onSegment?: (n: nu
   }
 }
 
+// mux.js는 조각형 MP4의 moov에 길이를 "모름"(0xffffffff)으로 적고 mehd도 넣지 않음. Mac QuickTime은 조각을
+// 훑어 실제 길이를 구하지만 Windows 플레이어는 이 값을 읽어 약 13시간으로 표시함. 그래서 mvhd·tkhd·mdhd에
+// 실제 길이를 적고 mvex 맨 앞에 mehd(전체 길이)를 넣음. mux.js는 이 상자들을 모두 버전 0(32비트)으로 씀.
+function withDuration(init: Uint8Array, seconds: number) {
+  const v = new DataView(init.buffer, init.byteOffset, init.byteLength);
+  const at: Record<string, number> = {};
+  let scale = 0; // mvhd의 시간 단위. tkhd·mehd 길이는 이 단위로 적음.
+  const walk = (start: number, end: number) => {
+    for (let p = start; p < end; p += v.getUint32(p)) {
+      const type = String.fromCharCode(...init.subarray(p + 4, p + 8));
+      at[type] = p;
+      if (type === 'mvhd') scale = v.getUint32(p + 20);
+      if (type === 'mvhd' || type === 'mdhd') v.setUint32(p + 24, Math.round(seconds * v.getUint32(p + 20)));
+      if (type === 'tkhd') v.setUint32(p + 28, Math.round(seconds * scale));
+      if (type === 'moov' || type === 'trak' || type === 'mdia') walk(p + 8, p + v.getUint32(p));
+    }
+  };
+  walk(0, init.length);
+  // mehd(16바이트)를 끼우고 그것을 감싼 mvex·moov의 크기를 그만큼 늘림.
+  const m = at.mvex + 8;
+  const out = new Uint8Array(init.length + 16);
+  out.set(init.subarray(0, m));
+  out.set(init.subarray(m), m + 16);
+  const o = new DataView(out.buffer);
+  o.setUint32(m, 16);
+  out.set([0x6d, 0x65, 0x68, 0x64], m + 4); // 'mehd', 버전·플래그는 0
+  o.setUint32(m + 12, Math.round(seconds * scale));
+  for (const p of [at.moov, at.mvex]) o.setUint32(p, o.getUint32(p) + 16);
+  return out;
+}
+
 // TS → 조각형 MP4(재인코딩 없음). 받는 속도에 맞춰 변환되므로 진행도는 받은 조각 수로 셈.
-async function toMp4(urls: string[], signal: AbortSignal, onProgress: (f: number) => void) {
+async function toMp4(urls: string[], seconds: number, signal: AbortSignal, onProgress: (f: number) => void) {
   const parts: Blob[] = [];
   const tm = new muxjs.mp4.Transmuxer();
-  tm.on('data', (s: { initSegment: BlobPart; data: BlobPart }) => {
-    if (!parts.length) parts.push(new Blob([s.initSegment]));
+  tm.on('data', (s: { initSegment: Uint8Array; data: BlobPart }) => {
+    if (!parts.length) parts.push(new Blob([withDuration(s.initSegment, seconds)]));
     parts.push(new Blob([s.data]));
   });
   for await (const seg of segments(urls, signal, n => onProgress(n / urls.length))) {
@@ -176,7 +207,7 @@ async function downloadVod(fmt: 'mp4' | 'mp3') {
     ctl.signal.throwIfAborted();
     start = performance.now();
     progress(0);
-    const parts = await (fmt === 'mp4' ? toMp4(urls, ctl.signal, progress) : toMp3(urls, seconds, ctl.signal, progress));
+    const parts = await (fmt === 'mp4' ? toMp4(urls, seconds, ctl.signal, progress) : toMp3(urls, seconds, ctl.signal, progress));
     save(parts, fmt === 'mp4' ? 'video/mp4' : 'audio/mpeg', `${vodName().replace(/[\\/:*?"<>|]/g, '_')}.${fmt}`);
   } catch (e) {
     if (ctl.signal.aborted) toast('다운로드를 취소했습니다.', 'guide');
@@ -303,7 +334,9 @@ function siteRate() {
     const m = /amd\.progress\(([^)]*)\)/.exec(s.textContent || '');
     if (!m) continue;
     const a = m[1].split(',').map(x => x.trim().replace(/^"|"$/g, ''));
-    return { complete: a[5] === 'true', cap: a[9] === 'true' ? Number(a[10]) || 1 : 1 };
+    // 사이트가 참을 강의마다 true 또는 1로 넘김(예: 16987의 완료 값은 true, 127155는 1).
+    const on = (x: string) => x === 'true' || x === '1';
+    return { complete: on(a[5]), cap: on(a[9]) ? Number(a[10]) || 1 : 1 };
   }
 }
 
