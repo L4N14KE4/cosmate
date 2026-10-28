@@ -1,4 +1,9 @@
-# <img src="cosmos-lxp-logo.png" width="32" height="32" alt="" align="top"> Cosmate
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-lockup-white.svg">
+    <img src="docs/logo-lockup.svg" alt="Cosmate" height="48">
+  </picture>
+</h1>
 
 **Cosmate**는 코스모스 LXP(신버전) 기반 LMS를 조금 더 편하게 쓰기 위한 **비공식·비영리** 크롬 확장 프로그램입니다.
 인천대학교 LMS(lms.inu.ac.kr)를 기준으로 만들었고, 같은 신버전 코스모스 화면을 쓰는 다른 학교 LMS도 자동으로 감지합니다.
