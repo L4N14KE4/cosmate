@@ -87,6 +87,9 @@ css.textContent = `
   .activity-dates > .cmx-cal { margin-left: 8px; }
   .cmx-cal-link { color: inherit; font-weight: 500; text-decoration: underline; }
   .cmx-cal-link:hover { color: var(--csms-tx-semantic-info-primary); }
+  /* 학습활동 모아보기 표: 이름 링크 옆에 한 줄로 붙임. */
+  td > .cmx-dl { display: inline-flex; vertical-align: middle; }
+  td > .cmx-cal { display: inline-flex; margin-left: 12px; vertical-align: middle; }
   .cmx-toast { pointer-events: auto; }
   dialog.cmx-dialog { position: fixed; inset: 0; display: none; width: min(480px, calc(100% - 32px)); height: fit-content; margin: auto; padding: 0; border: 0; background: none; box-shadow: none; overflow: visible; }
   dialog.cmx-dialog[open] { display: block; }
@@ -376,6 +379,10 @@ Promise.all([ready, parsed]).then(() => {
     onEach<HTMLAnchorElement>('.current-activity a.cell-activity-link[href*="/mod/ubfile/view.php"]', a => {
       addUbfileButton(a, new URL(a.href).searchParams.get('id')!);
     });
+    // 학습활동 모아보기 표: 파일 이름 옆에 다운로드 아이콘.
+    onEach<HTMLAnchorElement>('.resources-list tr[data-modname="ubfile"] a.btn-csms-link', a => {
+      addUbfileButton(a, new URL(a.href).searchParams.get('id')!);
+    });
     // 다운로드가 아니라 브라우저에서 열리는 첨부파일 링크(forcedownload 없음)에도 붙임.
     onEach<HTMLAnchorElement>('#region-main a[href*="/pluginfile.php/"]:not([href*="forcedownload"]):not(.cmx-dl)', a => {
       const d = dlIcon('a');
@@ -426,7 +433,7 @@ Promise.all([ready, parsed]).then(() => {
         });
       return;
     }
-    const a = target.closest?.<HTMLAnchorElement>('li.modtype_ubfile a.activity-container-link');
+    const a = target.closest?.<HTMLAnchorElement>('li.modtype_ubfile a.activity-container-link, .resources-list tr[data-modname="ubfile"] a.btn-csms-link');
     if (!a || /window\.open/.test(a.getAttribute('onclick') || '')) return; // 보기형 카드는 사이트가 엶
     e.preventDefault();
     e.stopPropagation();
@@ -470,6 +477,17 @@ Promise.all([ready, parsed]).then(() => {
       const wrap = url && calendarLinks(li.querySelector('.activityname')?.textContent?.trim() ?? '',
         lmsTime(dates.querySelector('.timeopen')?.textContent), lmsTime(dates.querySelector('.timeclose')?.textContent), url, 'cmx-cal-link');
       if (wrap) dates.append(wrap);
+    });
+    // 학습활동 모아보기 표의 과제 행. 표에는 날짜가 없어서 과목 페이지를 한 번만 받아 그 활동 카드에서 읽음.
+    // ponytail: mode=sections는 인천대 과목 페이지 주소임. 다른 학교에서 카드를 못 찾으면 링크만 안 붙음.
+    let course: Promise<Document> | undefined;
+    onEach<HTMLAnchorElement>('.resources-list tr[data-modname="assign"] a.btn-csms-link', async a => {
+      course ??= fetch(`/course/view.php?id=${new URLSearchParams(location.search).get('id')}&mode=sections`)
+        .then(r => r.text()).then(t => new DOMParser().parseFromString(t, 'text/html'));
+      const dates = (await course).querySelector(`#module-${new URL(a.href).searchParams.get('id')} [data-region="activity-dates"]`);
+      const wrap = calendarLinks(a.textContent!.trim(), lmsTime(dates?.querySelector('.timeopen')?.textContent),
+        lmsTime(dates?.querySelector('.timeclose')?.textContent), a.href, 'cmx-cal-link');
+      if (wrap) a.after(wrap);
     });
   }
 });
