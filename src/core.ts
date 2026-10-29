@@ -87,8 +87,8 @@ css.textContent = `
   .activity-dates > .cmx-cal { margin-left: 8px; }
   .cmx-cal-link { color: inherit; font-weight: 500; text-decoration: underline; }
   .cmx-cal-link:hover { color: var(--csms-tx-semantic-info-primary); }
-  /* 표(학습활동 모아보기·활동 현황)와 파일 상세 화면: 이름·열기 옆에 한 줄로 붙임. */
-  td > .cmx-dl, .resourceworkaround > .cmx-dl { display: inline-flex; vertical-align: middle; }
+  /* 표(학습활동 모아보기·활동 현황): 이름 링크 옆에 한 줄로 붙임. */
+  td > .cmx-dl { display: inline-flex; vertical-align: middle; }
   /* 활동 현황은 이름 링크가 32px 높이의 inline-flex 상자라서 링크도 가운데로 맞춰야 아이콘 높이가 같아짐. */
   td.td-activity > a:has(+ .cmx-dl) { vertical-align: middle; }
   td > .cmx-cal { display: inline-flex; margin-left: 12px; vertical-align: middle; }
@@ -386,12 +386,6 @@ Promise.all([ready, parsed]).then(() => {
     onEach<HTMLAnchorElement>('#region-main td a[href*="/mod/ubfile/view.php"]', a => {
       addUbfileButton(a, new URL(a.href).searchParams.get('id')!);
     });
-    // 파일 상세 화면(보기형)의 "열기" 버튼 옆에도 붙임.
-    if (location.pathname === '/mod/ubfile/view.php') {
-      onEach('#region-main a.btn[onclick*="viewer.php"]', btn => {
-        addUbfileButton(btn, new URLSearchParams(location.search).get('id')!);
-      });
-    }
     // 다운로드가 아니라 브라우저에서 열리는 첨부파일 링크(forcedownload 없음)에도 붙임.
     onEach<HTMLAnchorElement>('#region-main a[href*="/pluginfile.php/"]:not([href*="forcedownload"]):not(.cmx-dl)', a => {
       const d = dlIcon('a');
