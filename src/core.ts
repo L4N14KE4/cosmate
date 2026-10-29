@@ -87,8 +87,10 @@ css.textContent = `
   .activity-dates > .cmx-cal { margin-left: 8px; }
   .cmx-cal-link { color: inherit; font-weight: 500; text-decoration: underline; }
   .cmx-cal-link:hover { color: var(--csms-tx-semantic-info-primary); }
-  /* 학습활동 모아보기 표: 이름 링크 옆에 한 줄로 붙임. */
-  td > .cmx-dl { display: inline-flex; vertical-align: middle; }
+  /* 표(학습활동 모아보기·활동 현황)와 파일 상세 화면: 이름·열기 옆에 한 줄로 붙임. */
+  td > .cmx-dl, .resourceworkaround > .cmx-dl { display: inline-flex; vertical-align: middle; }
+  /* 활동 현황은 이름 링크가 32px 높이의 inline-flex 상자라서 링크도 가운데로 맞춰야 아이콘 높이가 같아짐. */
+  td.td-activity > a:has(+ .cmx-dl) { vertical-align: middle; }
   td > .cmx-cal { display: inline-flex; margin-left: 12px; vertical-align: middle; }
   .cmx-toast { pointer-events: auto; }
   dialog.cmx-dialog { position: fixed; inset: 0; display: none; width: min(480px, calc(100% - 32px)); height: fit-content; margin: auto; padding: 0; border: 0; background: none; box-shadow: none; overflow: visible; }
@@ -376,13 +378,20 @@ Promise.all([ready, parsed]).then(() => {
       };
       period.after(b);
     });
+    // 링크가 한 줄을 다 차지하는 flex라서, 뒤에 붙이면 이름이 짧아도 아랫줄로 내려감. 링크 안에 붙임.
     onEach<HTMLAnchorElement>('.current-activity a.cell-activity-link[href*="/mod/ubfile/view.php"]', a => {
+      addUbfileButton(a, new URL(a.href).searchParams.get('id')!, true);
+    });
+    // 표(학습활동 모아보기·활동 현황)의 파일 이름 옆에 다운로드 아이콘.
+    onEach<HTMLAnchorElement>('#region-main td a[href*="/mod/ubfile/view.php"]', a => {
       addUbfileButton(a, new URL(a.href).searchParams.get('id')!);
     });
-    // 학습활동 모아보기 표: 파일 이름 옆에 다운로드 아이콘.
-    onEach<HTMLAnchorElement>('.resources-list tr[data-modname="ubfile"] a.btn-csms-link', a => {
-      addUbfileButton(a, new URL(a.href).searchParams.get('id')!);
-    });
+    // 파일 상세 화면(보기형)의 "열기" 버튼 옆에도 붙임.
+    if (location.pathname === '/mod/ubfile/view.php') {
+      onEach('#region-main a.btn[onclick*="viewer.php"]', btn => {
+        addUbfileButton(btn, new URLSearchParams(location.search).get('id')!);
+      });
+    }
     // 다운로드가 아니라 브라우저에서 열리는 첨부파일 링크(forcedownload 없음)에도 붙임.
     onEach<HTMLAnchorElement>('#region-main a[href*="/pluginfile.php/"]:not([href*="forcedownload"]):not(.cmx-dl)', a => {
       const d = dlIcon('a');
@@ -395,7 +404,7 @@ Promise.all([ready, parsed]).then(() => {
     });
   }
 
-  // 8. 미리보기로 열기. 다운로드형 파일 카드(onclick 없음, view.php가 바로 파일로 넘김)는 사이트가
+  // 8. 미리보기로 열기. 다운로드형 파일 카드·표의 파일 링크(onclick 없음, view.php가 바로 파일로 넘김)는 사이트가
   // 보기형 카드에 쓰는 것과 같은 뷰어 팝업으로 열고, 과제·게시판 PDF 첨부파일(?forcedownload=1)은
   // 새 탭의 브라우저 PDF 뷰어로 엶. Ctrl/Cmd/Shift/Alt+클릭은 사이트 동작 그대로 둠.
   // 설정은 클릭할 때 읽으므로 팝업 스위치가 바로 적용됨.
@@ -433,7 +442,7 @@ Promise.all([ready, parsed]).then(() => {
         });
       return;
     }
-    const a = target.closest?.<HTMLAnchorElement>('li.modtype_ubfile a.activity-container-link, .resources-list tr[data-modname="ubfile"] a.btn-csms-link');
+    const a = target.closest?.<HTMLAnchorElement>('li.modtype_ubfile a.activity-container-link, #region-main td a[href*="/mod/ubfile/view.php"]');
     if (!a || /window\.open/.test(a.getAttribute('onclick') || '')) return; // 보기형 카드는 사이트가 엶
     e.preventDefault();
     e.stopPropagation();
