@@ -10,8 +10,8 @@ chrome.runtime.onMessage.addListener((m, sender, sendResponse) => {
 
   // 배속 패널: 사이트 플레이어는 교수 최대 배속보다 큰 값을 읽으면 되돌림. 그 검사가 페이지 안에
   // 있어서 페이지 환경(MAIN)에서 실행하고, 실제 배속은 유지한 채 video가 cap 이하로 보고하게 구현함.
-  // 이 함수는 문자열로 페이지에 넘어가므로 바깥 변수를 쓰면 안 됨. GitHub용(FULL) 빌드에만 있음.
-  if (FULL && m.rateShim) {
+  // 이 함수는 문자열로 페이지에 넘어가므로 바깥 변수를 쓰면 안 됨.
+  if (m.rateShim) {
     chrome.scripting.executeScript({
       target,
       world: 'MAIN',
