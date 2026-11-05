@@ -308,9 +308,9 @@ function goNext(href: string) {
   tick();
 }
 
-// 다음 강의 주소는 사이트의 "다음영상" 버튼에서 읽음.
+// 다음 강의 주소는 사이트의 "다음영상" 버튼에서 읽음. 다음 영상 이동은 GitHub용(FULL) 빌드에만 있음.
 function onEnded() {
-  const next = cfg.autoNext && document.querySelector<HTMLAnchorElement>('.right-container a[aria-label="다음영상"]')?.href;
+  const next = FULL && cfg.autoNext && document.querySelector<HTMLAnchorElement>('.right-container a[aria-label="다음영상"]')?.href;
   if (cfg.endNotify) {
     chime();
     chrome.runtime.sendMessage({ title: vodName(), next: !!next });
@@ -507,7 +507,8 @@ export function initVod() {
     // 둘 다 전체 화면 버튼 앞에 넣으므로 이 순서면 [장면 저장][PiP][전체 화면]이 됨.
     if (cfg.vodDownload) onEach('.vjs-fullscreen-control', addCaptureButton);
     if (cfg.pipButton) onEach('.vjs-fullscreen-control', addPipButton);
-    if (sessionStorage.cmxAutoplay) {
+    // 이동해 온 페이지를 음소거로 이어서 재생함. GitHub용(FULL) 빌드에만 있음.
+    if (FULL && sessionStorage.cmxAutoplay) {
       sessionStorage.removeItem('cmxAutoplay');
       // 크롬은 새로 연 페이지에서 소리 있는 자동 재생을 막으므로 음소거로 시작함. video.play() 대신
       // 플레이어 재생 버튼을 눌러야 video.js와 그에 걸린 사이트 진도 기록이 재생을 알아챔.

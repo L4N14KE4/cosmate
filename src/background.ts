@@ -34,11 +34,12 @@ chrome.runtime.onMessage.addListener((m, sender, sendResponse) => {
   }
 
   // 6. 그 밖의 메시지는 강의 종료(vod.ts의 onEnded)로 처리함: 시스템 알림과 그 탭의 툴바 배지.
+  // 다음 영상 문구는 스토어용 번들에 남지 않도록 message에서 FULL로 감쌈. 주석은 객체 안에 두면 번들에 남음.
   chrome.notifications.create({
     type: 'basic',
     iconUrl: chrome.runtime.getURL('assets/icon.png'), // 서비스 워커가 js/ 안에 있어 상대 경로 대신 절대 주소로 지정함
     title: '강의 시청 완료',
-    message: m.next ? `${m.title}\n곧 다음 영상으로 이동합니다.` : m.title,
+    message: FULL && m.next ? `${m.title}\n곧 다음 영상으로 이동합니다.` : m.title,
   });
   // 배지는 탭이 그새 닫히면 실패하므로 무시함.
   chrome.action.setBadgeBackgroundColor({ tabId: target.tabId, color: '#1181F9' }).catch(() => {});

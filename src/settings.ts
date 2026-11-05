@@ -1,4 +1,4 @@
-// 콘텐츠 스크립트와 팝업이 함께 쓰는 기본 설정.
+// 콘텐츠 스크립트와 팝업이 함께 쓰는 기본 설정. autoNext는 GitHub용(FULL) 빌드에만 있음.
 export const DEFAULTS = {
   courseLink: true,
   fileButton: true,
@@ -11,7 +11,7 @@ export const DEFAULTS = {
   calendarLinks: true,
   vodDownload: true,
   endNotify: true,
-  autoNext: true,
+  ...(FULL && { autoNext: true }),
   speedPanel: true,
   pipButton: true,
 };

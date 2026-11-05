@@ -29,7 +29,8 @@
 **강의 영상**
 - 강의 영상 저장 (MP4 / MP3, 진행률·남은 시간 표시, 중간 취소 가능)
 - 플레이어의 카메라 버튼으로 지금 장면을 원본 해상도 PNG로 저장
-- 강의가 끝나면 알림(배지·소리)과 다음 영상으로 자동 이동
+- 강의가 끝나면 알림(배지·소리)
+- 강의가 끝나면 다음 영상으로 자동 이동 (GitHub 릴리스 전용)
 - 다 들은 강의(사이트에서 완료로 표시된 강의)는 최대 4배속까지 재생 속도 조절
 - 작은 창(PiP)으로 보기
 
@@ -48,7 +49,7 @@
 
 ## 설치
 
-1. [Releases](../../releases)에서 최신 `cosmate-*.zip`을 내려받아 압축을 풉니다.
+1. [Releases](../../releases)에서 최신 `cosmate-*-full.zip`을 내려받아 압축을 풉니다.
 2. 크롬에서 `chrome://extensions`를 열고 오른쪽 위 **개발자 모드**를 켭니다.
 3. **압축해제된 확장 프로그램을 로드합니다**를 누르고 압축을 푼 폴더를 선택합니다.
 
@@ -58,12 +59,15 @@
 
 ```bash
 npm install
-npm run build   # js/ 생성 (npm run watch로 저장할 때마다 다시 빌드)
-npm run check   # 타입 검사
-npm run zip     # 검사·빌드 후 dist/cosmate-v<버전>.zip 생성
+npm run build      # js/ 생성, 전체 기능 (npm run watch로 저장할 때마다 다시 빌드)
+npm run check      # 타입 검사
+npm run zip        # 스토어 배포용: GitHub 전용 기능을 뺀 dist/cosmate-v<버전>.zip 생성
+npm run zip:full   # GitHub 릴리스용: 전체 기능 dist/cosmate-v<버전>-full.zip 생성
 ```
 
 빌드한 뒤 저장소 폴더를 **압축해제된 확장 프로그램**으로 불러오면 됩니다.
+
+GitHub 전용 기능은 소스에서 `FULL` 플래그로 감싸 두었고, 스토어용 빌드(`npm run zip`)는 그 코드와 안내 문구를 뺍니다.
 
 ## 사용 시 주의사항
 
