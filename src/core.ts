@@ -16,8 +16,9 @@ chrome.storage.onChanged.addListener(ch => {
 });
 
 // 우클릭·복사 차단 해제. 전역 스위치(인천대 LMS 팝업)는 모든 사이트에, 사이트별 스위치(다른 사이트
-// 팝업, rightClickSites)는 그 사이트에만 적용되며 퀴즈 응시·답안검토 화면도 포함함.
-const unlock = () => cfg.rightClick || cfg.rightClickSites.includes(location.origin);
+// 팝업, rightClickSites)는 그 사이트에만 적용되며 퀴즈 답안검토 화면도 포함함. 시험 응시 화면(attempt.php)은
+// GitHub용(FULL) 빌드에서만 포함하고, 스토어용은 그 화면에서 해제하지 않음.
+const unlock = () => (FULL || location.pathname !== '/mod/quiz/attempt.php') && (cfg.rightClick || cfg.rightClickSites.includes(location.origin));
 
 // window 캡처 단계에서 먼저 받아 사이트(동영상 플레이어 등)의 차단 처리로 넘기지 않음.
 // 붙여넣기(paste)는 편집기가 동작하도록 건드리지 않음.
