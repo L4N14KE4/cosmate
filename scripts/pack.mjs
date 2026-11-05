@@ -29,7 +29,7 @@ for (const f of ['popup', 'welcome']) {
 
 // 스토어용에 GitHub 전용 코드가 남았으면 중단함. grep은 없으면 1, 있으면 0, 오류면 2를 돌려줌.
 if (!full) {
-  const left = spawnSync('grep', ['-rnE', 'cmxAutoplay|goNext|autoNext|rateShim|FULL|다음 ?영상|<!--/?full-->|<!--store', `${dir}/js`, `${dir}/pages`], { encoding: 'utf8' });
+  const left = spawnSync('grep', ['-rnE', 'cmxAutoplay|goNext|autoNext|rateShim|printSlides|cmx-viewer|cmx-print|FULL|다음 ?영상|<!--/?full-->|<!--store', `${dir}/js`, `${dir}/pages`], { encoding: 'utf8' });
   if (left.status !== 1) throw new Error('스토어용 검사 실패(GitHub 전용 코드가 남았거나 grep 오류):\n' + left.stdout + left.stderr);
 }
 

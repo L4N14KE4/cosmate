@@ -218,7 +218,12 @@ async function downloadUbfile(cmid: string) {
   const t = toast('파일을 준비하고 있습니다…', 'guide', 0);
   try {
     if (!(await saveUbfile(cmid))) {
-      // 교수님이 다운로드를 막아 둔 파일은 뷰어를 열어 인쇄 창의 "PDF로 저장"으로 받게 함(아래 10번).
+      // 교수님이 다운로드를 막아 둔 파일은 GitHub용(FULL) 빌드에서만 뷰어를 열어 인쇄 창의 "PDF로 저장"으로
+      // 받게 함(아래 10번). 스토어용은 안내만 함.
+      if (!FULL) {
+        toast('교수님이 다운로드를 허용하지 않은 파일입니다.', 'warning');
+        return;
+      }
       t.remove();
       const ok = await confirmBox('인쇄로 받는 파일',
         '이 파일은 인쇄를 통해 다운받아야 하는 파일입니다. 인쇄창을 엽니다.\n인쇄창이 뜨기까지 시간이 걸릴 수 있습니다.\n인쇄창에서 "PDF로 저장"을 골라 저장하세요.');
@@ -518,7 +523,8 @@ Promise.all([ready, parsed]).then(() => {
 //     인쇄 창의 "PDF로 저장"으로 받게 함. 뷰어엔 coursemos 테마 시그널이 없어 siteActive() 밖에서 실행함.
 //     주소 끝의 #cmx-print(막힌 파일의 다운로드 아이콘이 붙임)가 있으면 슬라이드가 다 뜬 뒤 바로 인쇄 창을 엶.
 //     ponytail: 인쇄 확인창은 확장이 건너뛸 수 없어 저장은 사용자가 누름. 슬라이드형(.slides-*) 뷰어만 지원함.
-if (location.pathname.startsWith('/local/csmsdoc')) {
+//     GitHub용(FULL) 빌드에만 있음.
+if (FULL && location.pathname.startsWith('/local/csmsdoc')) {
   Promise.all([ready, parsed]).then(() => {
     if (!cfg.fileButton) return;
     const style = document.createElement('style');
