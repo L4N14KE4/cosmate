@@ -142,11 +142,9 @@ export function toast(msg: string, type = 'guide', ms = 4000, onCancel?: (b: HTM
   return t;
 }
 
-// 첫 사용 안내를 사이트 모달 모양으로 띄우고, 동의하면 true를 반환함.
+// 사이트 모달 모양의 확인 창을 띄우고, 확인을 누르면 true를 반환함.
 // .modal 클래스는 .modal-content가 사이트의 --bs-modal-* 값을 받도록 붙임.
-export async function notice(key: string, title: string, body: string) {
-  const k = 'notice_' + key;
-  if ((await chrome.storage.local.get(k))[k]) return true;
+async function confirmBox(title: string, body: string, okText = '확인') {
   const d = document.createElement('dialog');
   d.className = 'modal cmx-dialog';
   d.innerHTML = `<form method="dialog" class="modal-content">
@@ -154,15 +152,23 @@ export async function notice(key: string, title: string, body: string) {
     <div class="modal-body"></div>
     <div class="modal-footer">
       <button value="" class="btn btn-secondary">취소</button>
-      <button value="ok" class="btn btn-primary">동의하고 계속</button>
+      <button value="ok" class="btn btn-primary"></button>
     </div></form>`;
   d.querySelector('.modal-title')!.textContent = title;
   d.querySelector('.modal-body')!.textContent = body;
+  d.querySelector('.btn-primary')!.textContent = okText;
   document.body.append(d);
   d.showModal();
   await new Promise(r => d.addEventListener('close', r));
   d.remove();
-  if (d.returnValue !== 'ok') return false;
+  return d.returnValue === 'ok';
+}
+
+// 첫 사용 안내. 동의하면 true를 반환하고 다시 묻지 않음.
+export async function notice(key: string, title: string, body: string) {
+  const k = 'notice_' + key;
+  if ((await chrome.storage.local.get(k))[k]) return true;
+  if (!(await confirmBox(title, body, '동의하고 계속'))) return false;
   await chrome.storage.local.set({ [k]: true });
   return true;
 }
@@ -176,7 +182,7 @@ function dlIcon<K extends 'a' | 'button'>(tag: K) {
 }
 
 // 문서 뷰어가 부르는 worker.php. 원본 파일의 다운로드 주소를 알려 줌.
-async function fileInfo(cmid: string): Promise<{ code: string | number; file_download?: string; file_url?: string }> {
+async function fileInfo(cmid: string): Promise<{ code: string | number; file_download?: string; file_url?: string; file_realname?: string }> {
   for (let i = 0; i < 10; i++) {
     const t = await (await fetch('/local/csmsdoc/worker.php', {
       method: 'POST',
@@ -204,10 +210,21 @@ async function saveUbfile(cmid: string) {
   return true;
 }
 
+// 사이트가 보기형 파일 카드에 쓰는 것과 같은 뷰어 팝업 창 옵션.
+const VIEWER_FEATURES = 'width=1005,height=1005,toolbar=no,location=no,menubar=no,copyhistory=no,status=no,directories=no,scrollbars=yes,resizable=1';
+
 async function downloadUbfile(cmid: string) {
   const t = toast('파일을 준비하고 있습니다…', 'guide', 0);
   try {
-    if (!(await saveUbfile(cmid))) toast('교수님이 다운로드를 허용하지 않은 파일입니다.', 'warning');
+    if (!(await saveUbfile(cmid))) {
+      // 교수님이 다운로드를 막아 둔 파일은 뷰어를 열어 인쇄 창의 "PDF로 저장"으로 받게 함(아래 10번).
+      t.remove();
+      const ok = await confirmBox('인쇄로 받는 파일',
+        '이 파일은 인쇄를 통해 다운받아야 하는 파일입니다. 인쇄창을 엽니다.\n인쇄창이 뜨기까지 시간이 걸릴 수 있습니다.\n인쇄창에서 "PDF로 저장"을 골라 저장하세요.');
+      if (ok && !open(`/mod/ubfile/viewer.php?id=${cmid}#cmx-print`, 'documentviewer', VIEWER_FEATURES)) {
+        toast('팝업이 막혀 미리보기를 열지 못했습니다. 팝업을 허용한 뒤 다시 눌러 주세요.', 'warning', 6000);
+      }
+    }
   } catch (e) {
     toast((e as Error).message, 'danger');
   } finally {
@@ -440,8 +457,7 @@ Promise.all([ready, parsed]).then(() => {
     if (!a || /window\.open/.test(a.getAttribute('onclick') || '')) return; // 보기형 카드는 사이트가 엶
     e.preventDefault();
     e.stopPropagation();
-    open(`/mod/ubfile/viewer.php?id=${new URL(a.href).searchParams.get('id')}`, 'documentviewer',
-      'width=1005,height=1005,toolbar=no,location=no,menubar=no,copyhistory=no,status=no,directories=no,scrollbars=yes,resizable=1');
+    open(`/mod/ubfile/viewer.php?id=${new URL(a.href).searchParams.get('id')}`, 'documentviewer', VIEWER_FEATURES);
   }, true);
 
   // 4. 퀴즈 답안검토 인쇄. 응시 화면에는 넣지 않음(버튼 없음, Cmd+P도 사이트의 빈 인쇄 그대로).
@@ -494,3 +510,80 @@ Promise.all([ready, parsed]).then(() => {
     });
   }
 });
+
+// 10. 문서 뷰어(/local/csmsdoc)의 "PDF로 저장". 다운로드가 막힌 파일도 슬라이드를 한 장씩 한 쪽으로 인쇄해
+//     인쇄 창의 "PDF로 저장"으로 받게 함. 뷰어엔 coursemos 테마 시그널이 없어 siteActive() 밖에서 실행함.
+//     주소 끝의 #cmx-print(막힌 파일의 다운로드 아이콘이 붙임)가 있으면 슬라이드가 다 뜬 뒤 바로 인쇄 창을 엶.
+//     ponytail: 인쇄 확인창은 확장이 건너뛸 수 없어 저장은 사용자가 누름. 슬라이드형(.slides-*) 뷰어만 지원함.
+if (location.pathname.startsWith('/local/csmsdoc')) {
+  Promise.all([ready, parsed]).then(() => {
+    if (!cfg.fileButton) return;
+    const style = document.createElement('style');
+    style.textContent = `
+      .cmx-viewer-save { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; margin-right: 8px;
+                         padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
+      .cmx-viewer-save:hover { background: rgba(0, 0, 0, .06); }
+      .cmx-viewer-save svg { width: 22px; height: 22px; }
+      .cmx-viewer-wait { position: fixed; top: 76px; left: 50%; transform: translateX(-50%); z-index: 2147483647;
+                         padding: 10px 18px; border-radius: 999px; background: #2c2f32; color: #fff;
+                         font-size: 14px; line-height: 1.4; white-space: nowrap; box-shadow: 0 4px 12px rgba(0, 0, 0, .2); }
+      /* 인쇄: 슬라이드까지 가는 길목의 높이·숨김 제한을 풀고, 슬라이드를 1280×720px 쪽에 한 장씩 담음 */
+      @page { size: 1280px 720px; margin: 0; }
+      @media print {
+        :has(.slides-viewer) > :not(:has(.slides-viewer), .slides-viewer) { display: none !important; }
+        :has(.slides-viewer), .slides-viewer, .slides-viewer-container, .slides-zoom-wrapper {
+          display: block !important; position: static !important; overflow: visible !important; transform: none !important; zoom: 1 !important;
+          width: auto !important; height: auto !important; min-height: 0 !important; max-width: none !important; max-height: none !important;
+          margin: 0 !important; padding: 0 !important; border: 0 !important; background: #fff !important;
+        }
+        .slides-page-box { display: block !important; position: relative !important; transform: none !important; overflow: hidden !important;
+          width: 1280px !important; height: 719px !important; margin: 0 !important; padding: 0 !important;
+          break-after: page !important; break-inside: avoid !important; }
+        .slides-page-box:last-child { break-after: auto !important; }
+        .slides-page-box > div { position: static !important; transform: none !important; width: 100% !important; height: 100% !important; }
+        .slides-page-html { display: none !important; }
+        img.slides-page-image { display: block !important; position: static !important; transform: none !important;
+          width: 1280px !important; height: 719px !important; object-fit: contain !important; }
+      }
+    `;
+    document.documentElement.append(style);
+
+    const slides = () => [...document.querySelectorAll<HTMLImageElement>('img.slides-page-image')];
+    const loaded = () => slides().length > 0 && slides().every(m => m.complete && m.naturalWidth > 0);
+    const printSlides = async () => {
+      // 인쇄창이 뜰 때까지 화면이 멈춘 것처럼 보이므로 안내를 띄워 둠
+      const wait = document.createElement('div');
+      wait.className = 'cmx-viewer-wait';
+      wait.textContent = '인쇄창을 준비하고 있습니다. 시간이 걸릴 수 있습니다.';
+      document.body.append(wait);
+      try {
+        for (let i = 0; i < 120 && !loaded(); i++) await new Promise(r => setTimeout(r, 250)); // 최대 30초
+        if (!loaded()) return alert('슬라이드를 불러오지 못했습니다. 잠시 후 다시 시도하세요.');
+        // 인쇄창의 기본 파일 이름이 페이지 제목이라 원래 파일 이름으로 바꿈
+        try {
+          const name = (await fileInfo(new URLSearchParams(location.search).get('id')!)).file_realname;
+          if (name) document.title = name.replace(/\.[a-z0-9]{2,5}$/i, '');
+        } catch { /* 이름을 못 받으면 제목 그대로 */ }
+        await new Promise(r => setTimeout(r, 100)); // 안내가 먼저 화면에 그려지게 함
+        print();
+      } finally {
+        wait.remove();
+      }
+    };
+
+    // 헤더 오른쪽의 "원문 언어" 앞에 뷰어의 아이콘 버튼과 같은 크기로 붙임.
+    onEach('#box-csmsdoc .header-actions', box => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cmx-viewer-save';
+      b.title = '인쇄창으로 PDF 저장 (뜨기까지 시간이 걸릴 수 있습니다)';
+      b.innerHTML = DL_SVG;
+      b.onclick = printSlides;
+      box.prepend(b);
+    });
+    if (location.hash === '#cmx-print') {
+      history.replaceState(null, '', location.pathname + location.search); // 새로고침해도 다시 인쇄하지 않음
+      printSlides();
+    }
+  });
+}
