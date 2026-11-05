@@ -323,7 +323,8 @@ function onEnded() {
 
 // 사이트는 다 들은 강의도 교수가 정한 최대 배속으로 묶음. 사이트가 완료로 표시한 강의(자유
 // 탐색이 풀리는 그 값)에만 유튜브식 패널(슬라이더, −/+, 프리셋, 최대 4배)을 붙이고, 진도가
-// 남은 강의는 사이트 배속 메뉴와 제한을 그대로 둠.
+// 남은 강의는 사이트 배속 메뉴와 제한을 그대로 둠. 사이트 제한을 넘는 4배까지는 GitHub용(FULL)
+// 빌드에만 있고, 스토어용은 사이트 제한 안에서만 씀.
 const SPEED_MAX = 4;
 const SPEED_PRESETS = [1, 1.25, 1.5, 2, 3];
 
@@ -346,7 +347,7 @@ async function addSpeedPanel(video: HTMLVideoElement) {
   const player = video.closest<HTMLElement>('.video-js');
   if (!info?.complete || !player) return;
   // 페이지 쪽 보정 코드를 못 넣으면 사이트가 배속을 되돌리므로 사이트 제한 안에서만 씀.
-  const max = (await chrome.runtime.sendMessage({ rateShim: info.cap })) ? SPEED_MAX : info.cap;
+  const max = FULL && (await chrome.runtime.sendMessage({ rateShim: info.cap })) ? SPEED_MAX : info.cap;
 
   const panel = document.createElement('div');
   panel.className = 'cmx-speed-panel';

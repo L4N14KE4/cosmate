@@ -18,15 +18,18 @@ for (const p of ['manifest.json', 'pages', 'assets', 'LICENSE', 'vendor']) cpSyn
 execFileSync('npm', ['run', 'build', '--', `--outdir=${dir}/js`, ...(full ? [] : ['--define:FULL=false', '--minify-syntax'])], { stdio: 'inherit' });
 
 // <!--full-->…<!--/full-->: GitHub용에서는 표시만 지우고 스토어용에서는 내용까지 지움.
-const mark = full ? /<!--\/?full-->/g : /<!--full-->[\s\S]*?<!--\/full-->/g;
+// <!--store:…-->: 주석 속 HTML. 스토어용에서만 풀어 쓰고 GitHub용에서는 지움(저장소 폴더에서는 주석이라 안 보임).
+const strip = html => full
+  ? html.replace(/<!--\/?full-->/g, '').replace(/<!--store:[\s\S]*?-->/g, '')
+  : html.replace(/<!--full-->[\s\S]*?<!--\/full-->/g, '').replace(/<!--store:([\s\S]*?)-->/g, '$1');
 for (const f of ['popup', 'welcome']) {
   const p = `${dir}/pages/${f}.html`;
-  writeFileSync(p, readFileSync(p, 'utf8').replace(mark, ''));
+  writeFileSync(p, strip(readFileSync(p, 'utf8')));
 }
 
 // 스토어용에 GitHub 전용 코드가 남았으면 중단함. grep은 없으면 1, 있으면 0, 오류면 2를 돌려줌.
 if (!full) {
-  const left = spawnSync('grep', ['-rnE', 'cmxAutoplay|goNext|autoNext|FULL|다음 ?영상|<!--/?full-->', `${dir}/js`, `${dir}/pages`], { encoding: 'utf8' });
+  const left = spawnSync('grep', ['-rnE', 'cmxAutoplay|goNext|autoNext|rateShim|FULL|다음 ?영상|<!--/?full-->|<!--store', `${dir}/js`, `${dir}/pages`], { encoding: 'utf8' });
   if (left.status !== 1) throw new Error('스토어용 검사 실패(GitHub 전용 코드가 남았거나 grep 오류):\n' + left.stdout + left.stderr);
 }
 
