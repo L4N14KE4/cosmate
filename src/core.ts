@@ -432,6 +432,8 @@ Promise.all([ready, parsed]).then(() => {
     const target = e.target as Element;
     const att = target.closest?.<HTMLAnchorElement>(ATT);
     if (att && isPdf(att)) {
+      // 게시판은 사이트의 다운로드 아이콘이 파일 링크 안에 있음. 아이콘은 사이트 동작(다운로드) 그대로 둠.
+      if (target.closest('.file-down, [class*="btn-csms-icon"]')) return;
       e.preventDefault();
       e.stopPropagation();
       const u = new URL(att.href);
