@@ -23,6 +23,13 @@
   /* 제목은 Degular Bold를 윤곽선으로 바꾼 wordmark.svg(Adobe Fonts 글꼴 파일은 확장에 넣을 수 없음). */
   h1 { flex: 1; margin: 0; line-height: 0; }
   h1 img { height: 15px; }
+  /* 새 버전 안내(GitHub용): 제목 줄 아래 한 줄. 새로고침 안내(#stale)가 덮어도 선명하게 그 위에 둠. */
+  #update { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px;
+            padding: 5px 12px; border: 1px solid var(--brand-line); border-radius: 12px; background: var(--brand-soft);
+            color: var(--brand); font-size: 12.5px; font-weight: 600; text-decoration: none; white-space: nowrap; transition: background .12s; }
+  #update:hover { background: #d5e9fe; }
+  #update[hidden] { display: none; }
+  #update small { margin-left: 4px; font-size: 11.5px; font-weight: 500; }
   #notice { margin: 4px 4px 0; font-size: 12px; color: var(--gray); }
   #notice:empty { display: none; }
   /* 이 사이트 행: 주소는 한 줄로 두고 넘치면 말줄임. */
@@ -91,6 +98,7 @@
   <img src="../assets/icon.png" alt="">
   <h1><img src="../assets/wordmark.svg" alt="Cosmate"></h1>
 </header>
+<!--full--><a id="update" href="https://github.com/L4N14KE4/cosmate/releases/latest" target="_blank" hidden><span>새 버전이 있어요<small></small></span><span>받으러 가기 ›</span></a><!--/full-->
 <p id="notice"></p>
 
 <section id="site" hidden>

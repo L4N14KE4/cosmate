@@ -3,6 +3,23 @@ import { DEFAULTS, type Settings } from './settings';
 // 페이지를 불러올 때 요소를 넣거나 바꾸는 옵션이라 새로고침해야 적용됨. 나머지는 바로 적용됨.
 const NEEDS_REFRESH = ['courseLink', 'fileButton', 'quizPrint', 'calendarLinks', 'vodDownload', 'speedPanel', 'pipButton'];
 
+// 새 버전 안내(GitHub용): 하루에 한 번만 GitHub 최신 릴리스 번호를 확인해 localStorage에 두고, 팝업을 열 때마다
+// 지금 버전과 비교함. 스토어용은 스토어가 알아서 업데이트하므로 이 코드를 뺌.
+if (FULL) (async () => {
+  let saved: { at: number; tag: string } | null = JSON.parse(localStorage.latest ?? 'null');
+  if (!saved || Date.now() - saved.at > 864e5) {
+    const r = await fetch('https://api.github.com/repos/L4N14KE4/cosmate/releases/latest').then(r => r.json()).catch(() => null);
+    // 실패(오프라인·요청 한도)하면 저장하지 않아 다음에 다시 확인함.
+    if (r?.tag_name) localStorage.latest = JSON.stringify(saved = { at: Date.now(), tag: r.tag_name });
+  }
+  const ver = saved?.tag.replace(/^v/, '');
+  // numeric 비교라 0.1.10이 0.1.9보다 크게 나옴.
+  if (ver && ver.localeCompare(chrome.runtime.getManifest().version, undefined, { numeric: true }) > 0) {
+    document.querySelector('#update small')!.textContent = ver;
+    document.getElementById('update')!.hidden = false;
+  }
+})();
+
 (async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const cfg = (await chrome.storage.local.get(DEFAULTS)) as Settings;
