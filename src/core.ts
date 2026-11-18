@@ -13,6 +13,7 @@ chrome.storage.onChanged.addListener(ch => {
   for (const k in ch) (cfg as Record<string, unknown>)[k] = ch[k].newValue;
   syncUnlockCss();
   syncCompact();
+  syncTabs();
 });
 
 // 우클릭·복사 차단 해제. 전역 스위치(인천대 LMS 팝업)는 모든 사이트에, 사이트별 스위치(다른 사이트
@@ -52,6 +53,12 @@ function syncCompact() {
   document.documentElement.classList.toggle('cmx-compact', cfg.compactList && (!pageParsed || siteActive()));
 }
 ready.then(syncCompact);
+
+// 팝업을 새 탭으로(tabs.ts). 페이지 환경의 window.open이 이 클래스를 보고 창 크기 옵션을 뺌.
+// 사이트 감지는 페이지를 다 읽어야 되므로 그 전에는 붙이지 않음. 다른 사이트의 로그인 팝업 등은 건드리지 않음.
+function syncTabs() {
+  document.documentElement.classList.toggle('cmx-tabs', cfg.forceTab && pageParsed && siteActive());
+}
 
 export const DL_SVG = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M11.9996 2.1001C12.4967 2.1001 12.8996 2.50304 12.8996 3.0001V14.8273L17.3632 10.3637C17.7147 10.0122 18.2845 10.0122 18.636 10.3637C18.9875 10.7152 18.9875 11.285 18.636 11.6365L12.636 17.6365C12.2845 17.988 11.7147 17.988 11.3632 17.6365L5.36321 11.6365C5.01174 11.285 5.01174 10.7152 5.36321 10.3637C5.71468 10.0122 6.28453 10.0122 6.63601 10.3637L11.0996 14.8273V3.0001C11.0996 2.50304 11.5026 2.1001 11.9996 2.1001ZM2.09961 21.0001C2.09961 20.503 2.50255 20.1001 2.99961 20.1001H20.9996C21.4967 20.1001 21.8996 20.503 21.8996 21.0001C21.8996 21.4972 21.4967 21.9001 20.9996 21.9001H2.99961C2.50255 21.9001 2.09961 21.4972 2.09961 21.0001Z" fill="#899199" class="svg-color"/></svg>';
 
@@ -213,6 +220,8 @@ async function saveUbfile(cmid: string) {
 
 // 사이트가 보기형 파일 카드에 쓰는 것과 같은 뷰어 팝업 창 옵션.
 const VIEWER_FEATURES = 'width=1005,height=1005,toolbar=no,location=no,menubar=no,copyhistory=no,status=no,directories=no,scrollbars=yes,resizable=1';
+// 확장이 직접 여는 창은 격리 환경이라 tabs.ts를 거치지 않아서 같은 설정을 여기서도 적용함.
+const viewerFeatures = () => (cfg.forceTab ? undefined : VIEWER_FEATURES);
 
 async function downloadUbfile(cmid: string) {
   const t = toast('파일을 준비하고 있습니다…', 'guide', 0);
@@ -227,7 +236,7 @@ async function downloadUbfile(cmid: string) {
       t.remove();
       const ok = await confirmBox('인쇄로 받는 파일',
         '이 파일은 인쇄를 통해 다운받아야 하는 파일입니다. 인쇄창을 엽니다.\n인쇄창이 뜨기까지 시간이 걸릴 수 있습니다.\n인쇄창에서 "PDF로 저장"을 골라 저장하세요.');
-      if (ok && !open(`/mod/ubfile/viewer.php?id=${cmid}#cmx-print`, 'documentviewer', VIEWER_FEATURES)) {
+      if (ok && !open(`/mod/ubfile/viewer.php?id=${cmid}#cmx-print`, 'documentviewer', viewerFeatures())) {
         toast('팝업이 막혀 미리보기를 열지 못했습니다. 팝업을 허용한 뒤 다시 눌러 주세요.', 'warning', 6000);
       }
     }
@@ -349,6 +358,7 @@ chrome.runtime.onMessage.addListener((m, sender, reply) => {
 Promise.all([ready, parsed]).then(() => {
   pageParsed = true;
   syncCompact();
+  syncTabs();
   if (!siteActive()) return;
   // 1. 이번 주 할 일: 과목명을 과목 링크로 바꿈.
   if (cfg.courseLink) {
@@ -465,7 +475,7 @@ Promise.all([ready, parsed]).then(() => {
     if (!a || /window\.open/.test(a.getAttribute('onclick') || '')) return; // 보기형 카드는 사이트가 엶
     e.preventDefault();
     e.stopPropagation();
-    open(`/mod/ubfile/viewer.php?id=${new URL(a.href).searchParams.get('id')}`, 'documentviewer', VIEWER_FEATURES);
+    open(`/mod/ubfile/viewer.php?id=${new URL(a.href).searchParams.get('id')}`, 'documentviewer', viewerFeatures());
   }, true);
 
   // 4. 퀴즈 답안검토 인쇄. 응시 화면에는 넣지 않음(버튼 없음, Cmd+P도 사이트의 빈 인쇄 그대로).

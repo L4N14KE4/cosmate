@@ -3,6 +3,7 @@ export const DEFAULTS = {
   courseLink: true,
   fileButton: true,
   previewFiles: true,
+  forceTab: true,
   rightClick: false,
   rightClickSites: [] as string[],
   siteOverrides: {} as Record<string, 'on' | 'off'>, // origin → 'on' | 'off': 자동 감지보다 우선하는 사용자의 사이트별 선택

@@ -2,7 +2,7 @@
   "name": "cosmate",
   "private": true,
   "scripts": {
-    "build": "esbuild src/content.ts src/popup.ts src/background.ts src/welcome.ts --bundle --outdir=js --target=chrome120 --define:FULL=true",
+    "build": "esbuild src/content.ts src/popup.ts src/background.ts src/welcome.ts src/tabs.ts --bundle --outdir=js --target=chrome120 --define:FULL=true",
     "watch": "npm run build -- --watch",
     "check": "tsc --noEmit",
     "zip": "npm run check && node scripts/pack.mjs",
