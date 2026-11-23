@@ -211,10 +211,7 @@ async function saveUbfile(cmid: string) {
   const j = await fileInfo(cmid);
   if (j.file_download !== '1' || !j.file_url) return false;
   fetch(`/mod/ubfile/view.php?id=${cmid}`); // 원래 흐름처럼 view.php를 방문해 열람 기록을 남김
-  const a = document.createElement('a');
-  a.href = j.file_url;
-  a.download = '';
-  a.click();
+  clickDownload(j.file_url);
   return true;
 }
 
@@ -239,6 +236,35 @@ async function downloadUbfile(cmid: string) {
       if (ok && !open(`/mod/ubfile/viewer.php?id=${cmid}#cmx-print`, 'documentviewer', viewerFeatures())) {
         toast('팝업이 막혀 미리보기를 열지 못했습니다. 팝업을 허용한 뒤 다시 눌러 주세요.', 'warning', 6000);
       }
+    }
+  } catch (e) {
+    toast((e as Error).message, 'danger');
+  } finally {
+    t.remove();
+  }
+}
+
+const clickDownload = (href: string) => {
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = '';
+  a.click();
+};
+
+// 폴더는 폴더 화면의 "폴더 다운로드"(zip)를 받음. 교수님이 그 버튼을 꺼 두었으면 폴더 안 파일을 하나씩 받음.
+// 폴더 화면을 받아 오면 사이트에서 연 것처럼 열람 기록이 남음.
+async function downloadFolder(cmid: string) {
+  const t = toast('폴더를 준비하고 있습니다…', 'guide', 0);
+  try {
+    const d = new DOMParser().parseFromString(await (await fetch(`/mod/folder/view.php?id=${cmid}`)).text(), 'text/html');
+    if (d.querySelector('form[action*="download_folder.php"]')) return clickDownload(`/mod/folder/download_folder.php?id=${cmid}`);
+    const files = [...d.querySelectorAll<HTMLAnchorElement>('a[href*="/pluginfile.php/"][href*="/mod_folder/"]')];
+    // 로그인이 풀리면 폴더 화면 대신 로그인 화면이 옴
+    if (!files.length) throw new Error('폴더 정보를 받지 못했습니다. 페이지를 새로고침한 뒤 다시 시도하세요.');
+    for (const f of files) {
+      const u = new URL(f.href);
+      u.searchParams.set('forcedownload', '1');
+      clickDownload(u.href);
     }
   } catch (e) {
     toast((e as Error).message, 'danger');
@@ -382,18 +408,25 @@ Promise.all([ready, parsed]).then(() => {
 
   // 7. 파일 옆 다운로드 아이콘.
   if (cfg.fileButton) {
-    const addUbfileButton = (where: Element, cmid: string, append?: boolean) => {
+    const addUbfileButton = (where: Element, cmid: string, append?: boolean, download = downloadUbfile) => {
       const b = dlIcon('button');
       b.type = 'button';
       b.addEventListener('click', e => {
         e.preventDefault();
         e.stopPropagation();
-        downloadUbfile(cmid);
+        download(cmid);
       });
       append ? where.append(b) : where.after(b);
     };
     onEach('li.modtype_ubfile .activity-item', item => {
       addUbfileButton(item, item.closest('li')!.id.replace('module-', ''), true);
+    });
+    // 폴더 카드와 표의 폴더 이름 옆.
+    onEach('li.modtype_folder .activity-item', item => {
+      addUbfileButton(item, item.closest('li')!.id.replace('module-', ''), true, downloadFolder);
+    });
+    onEach<HTMLAnchorElement>('#region-main td a[href*="/mod/folder/view.php"]', a => {
+      addUbfileButton(a, new URL(a.href).searchParams.get('id')!, false, downloadFolder);
     });
     // 주차 기간 알약 옆에 그 주차(하위 차시 포함)의 파일을 모두 받는 버튼. 파일이 2개 이상인 주차에만 붙임.
     onEach('.ubformat > li.section > .section-item > .course-section-header .section-period-text', period => {
