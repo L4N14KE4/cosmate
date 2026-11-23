@@ -171,6 +171,7 @@ async function toMp3(urls: string[], seconds: number, signal: AbortSignal, onPro
 // 받아쓰기는 사용자가 넣은 Groq API 키로 Groq의 Whisper에 오디오를 보내서 함. 확장 안에서 끝나지 않고
 // 외부 서버로 오디오가 나가므로 스토어용 빌드에서는 빼고, 처음 쓸 때 따로 동의를 받음.
 const GROQ_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
+const GROQ_GUIDE = 'https://github.com/L4N14KE4/cosmate/blob/main/docs/groq-api-key.md'; // 키 만드는 방법(스크린샷)
 // 무료 등급의 오디오 한도(시간당·하루)는 모델마다 따로 잡힘. turbo가 막히면 large-v3로 넘어감.
 const GROQ_MODELS = ['whisper-large-v3-turbo', 'whisper-large-v3'];
 // MP3를 20분씩 끊어 보냄. 모노 48kbps라 한 조각이 약 7MB로 무료 등급 파일 한도(25MB) 안에 듦.
@@ -183,7 +184,8 @@ const GROQ_NOTICE = `스크립트를 만들려면 강의 오디오를 Groq(api.g
 
 · 오디오는 입력한 Groq API 키로 사용자 계정에 보내지며, Cosmate 개발자에게는 아무것도 전송되지 않습니다.
 · Groq의 데이터 처리 방침은 groq.com의 개인정보처리방침을 따릅니다.
-· 만든 스크립트도 강의 영상과 같이 개인 학습(복습) 목적으로만 사용해야 합니다.`;
+· 만든 스크립트도 강의 영상과 같이 개인 학습(복습) 목적으로만 사용해야 합니다.
+· 다음 창에서 본인의 Groq API 키(무료)를 입력합니다. 처음 한 번만 입력하면 됩니다.`;
 
 const hms = (s: number) => [s / 3600, (s / 60) % 60, s % 60].map(n => String(Math.floor(n)).padStart(2, '0')).join(':');
 
@@ -195,7 +197,9 @@ async function askGroqKey() {
     <div class="modal-header"><h5 class="modal-title">Groq API 키 입력</h5></div>
     <div class="modal-body">
       <p>스크립트 받아쓰기에 쓸 Groq API 키를 입력하세요. 키는 이 브라우저(chrome.storage.local)에만 저장됩니다.</p>
-      <p><a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>에서 무료로 만들 수 있습니다(카드 등록 없음).</p>
+      <p>키는 <a href="https://console.groq.com/keys" target="_blank" rel="noopener">Groq</a>에서 무료로 만들 수 있습니다(카드 등록 없음).<br>
+        가입 → API Keys → Create API Key → 이름 적고 Submit → Copy<br>
+        <a href="${GROQ_GUIDE}" target="_blank" rel="noopener">화면별 발급 방법 보기</a></p>
       <input type="password" class="form-control" placeholder="gsk_..." autocomplete="off" required>
     </div>
     <div class="modal-footer">
