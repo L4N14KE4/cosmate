@@ -114,24 +114,21 @@ function mono(a: AudioData) {
   return out;
 }
 
-// TS → AAC 프레임(mux.js) → PCM(WebCodecs) → MP3(lamejs), 조각 단위로 처리함.
-// 받기가 인코딩보다 훨씬 먼저 끝나므로 진행도는 인코딩한 오디오 길이로 잼.
-async function toMp3(urls: string[], seconds: number, signal: AbortSignal, onProgress: (f: number) => void) {
-  const parts: Blob[] = [];
+// TS → AAC 프레임(mux.js) → PCM(WebCodecs), 조각 단위로 처리함. onPcm은 모노 PCM과 표본율, 그 PCM이
+// 끝나는 시각(초)을 받음. MP3 저장과 스크립트 만들기가 함께 씀.
+async function decodeAudio(urls: string[], signal: AbortSignal, onPcm: (pcm: Int16Array, rate: number, end: number) => void) {
   const ts = new muxjs.mp2t.TransportPacketStream();
   const adts = new muxjs.codecs.Adts();
   ts.pipe(new muxjs.mp2t.TransportParseStream()).pipe(new muxjs.mp2t.ElementaryStream()).pipe(adts);
-  let enc: any, dec: AudioDecoder | undefined, time = 0;
+  let dec: AudioDecoder | undefined, time = 0;
   // 디코더를 닫으면 대기열이 버려지고 아래 flush()가 실패함.
   signal.addEventListener('abort', () => dec && dec.state !== 'closed' && dec.close(), { once: true });
   adts.on('data', (f: any) => {
     if (!dec) {
       const sfi = f.samplingfrequencyindex;
-      enc = new lamejs.Mp3Encoder(1, f.samplerate, 96);
       dec = new AudioDecoder({
         output: a => {
-          parts.push(new Blob([enc.encodeBuffer(mono(a))]));
-          onProgress((a.timestamp + (a.duration ?? 0)) / 1e6 / seconds);
+          onPcm(mono(a), a.sampleRate, (a.timestamp + (a.duration ?? 0)) / 1e6);
           a.close();
         },
         error: e => console.error(e), // 디코더가 실패하면 아래 flush()도 실패함
@@ -150,8 +147,158 @@ async function toMp3(urls: string[], seconds: number, signal: AbortSignal, onPro
   ts.flush();
   if (!dec) throw new Error('오디오 트랙을 찾지 못했습니다.');
   await dec.flush();
+}
+
+// PCM → MP3(lamejs). 받기가 인코딩보다 훨씬 먼저 끝나므로 진행도는 인코딩한 오디오 길이로 잼.
+async function toMp3(urls: string[], seconds: number, signal: AbortSignal, onProgress: (f: number) => void) {
+  const parts: Blob[] = [];
+  let enc: any;
+  await decodeAudio(urls, signal, (pcm, rate, end) => {
+    enc ??= new lamejs.Mp3Encoder(1, rate, 96);
+    parts.push(new Blob([enc.encodeBuffer(pcm)]));
+    onProgress(end / seconds);
+  });
   parts.push(new Blob([enc.flush()]));
   return parts;
+}
+
+// 11. 강의 스크립트(TXT). GitHub용(FULL) 빌드에만 있음 -------------------------------------
+
+// 받아쓰기는 사용자가 넣은 Groq API 키로 Groq의 Whisper에 오디오를 보내서 함. 확장 안에서 끝나지 않고
+// 외부 서버로 오디오가 나가므로 스토어용 빌드에서는 빼고, 처음 쓸 때 따로 동의를 받음.
+const GROQ_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
+// 무료 등급의 오디오 한도(시간당·하루)는 모델마다 따로 잡힘. turbo가 막히면 large-v3로 넘어감.
+const GROQ_MODELS = ['whisper-large-v3-turbo', 'whisper-large-v3'];
+// MP3를 20분씩 끊어 보냄. 모노 48kbps라 한 조각이 약 7MB로 무료 등급 파일 한도(25MB) 안에 듦.
+// 조각 경계에서 단어가 잘릴 수 있어 앞 조각의 끝 문장을 다음 요청의 prompt로 넘김.
+const CHUNK_SEC = 20 * 60;
+// 한도가 풀릴 때까지 이보다 오래 기다려야 하면 하루 한도를 다 쓴 것으로 보고 멈춤.
+const MAX_WAIT_SEC = 70 * 60;
+
+const GROQ_NOTICE = `스크립트를 만들려면 강의 오디오를 Groq(api.groq.com)로 보내 받아쓰기(Whisper)를 합니다.
+
+· 오디오는 입력한 Groq API 키로 사용자 계정에 보내지며, Cosmate 개발자에게는 아무것도 전송되지 않습니다.
+· Groq의 데이터 처리 방침은 groq.com의 개인정보처리방침을 따릅니다.
+· 만든 스크립트도 강의 영상과 같이 개인 학습(복습) 목적으로만 사용해야 합니다.`;
+
+const hms = (s: number) => [s / 3600, (s / 60) % 60, s % 60].map(n => String(Math.floor(n)).padStart(2, '0')).join(':');
+
+// 사이트 모달 모양으로 Groq API 키를 입력받음. 취소하면 null.
+async function askGroqKey() {
+  const d = document.createElement('dialog');
+  d.className = 'modal cmx-dialog';
+  d.innerHTML = `<form method="dialog" class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Groq API 키 입력</h5></div>
+    <div class="modal-body">
+      <p>스크립트 받아쓰기에 쓸 Groq API 키를 입력하세요. 키는 이 브라우저(chrome.storage.local)에만 저장됩니다.</p>
+      <p><a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>에서 무료로 만들 수 있습니다(카드 등록 없음).</p>
+      <input type="password" class="form-control" placeholder="gsk_..." autocomplete="off" required>
+    </div>
+    <div class="modal-footer">
+      <button value="" class="btn btn-secondary" formnovalidate>취소</button>
+      <button value="ok" class="btn btn-primary">저장하고 계속</button>
+    </div></form>`;
+  d.querySelector('.modal-body')!.setAttribute('style', 'white-space: normal');
+  document.body.append(d);
+  d.showModal();
+  await new Promise(r => d.addEventListener('close', r));
+  const key = d.querySelector('input')!.value.trim();
+  d.remove();
+  if (d.returnValue !== 'ok' || !key) return null;
+  await chrome.storage.local.set({ groqKey: key });
+  return key;
+}
+
+const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((ok, fail) => {
+  const t = setTimeout(ok, ms);
+  signal.addEventListener('abort', () => (clearTimeout(t), fail(signal.reason)), { once: true });
+});
+
+// "Please try again in 7m30.5s" 같은 오류 문구나 retry-after 헤더에서 기다릴 초를 읽음.
+function waitSec(res: Response, body: string) {
+  const m = /try again in ((?:\d+h)?(?:\d+m)?(?:[\d.]+s)?)/i.exec(body)?.[1];
+  const sec = m ? +(/(\d+)h/.exec(m)?.[1] ?? 0) * 3600 + +(/(\d+)m/.exec(m)?.[1] ?? 0) * 60 + +(/([\d.]+)s/.exec(m)?.[1] ?? 0) : 0;
+  return sec || Number(res.headers.get('retry-after')) || 60;
+}
+
+type Segment = { start: number; text: string };
+const blockedUntil: Record<string, number> = {}; // 모델 → 한도가 풀리는 시각(ms). 같은 탭의 다음 강의에도 이어짐.
+
+// 조각 하나를 받아씀. 한도(429)에 걸리면 다른 모델로 넘어가고, 모두 막혔으면 풀릴 때까지 기다림.
+async function transcribe(mp3: Blob, key: string, prompt: string, signal: AbortSignal, onWait: (msg: string) => void) {
+  for (let fails = 0; ;) {
+    const now = Date.now();
+    const model = GROQ_MODELS.find(m => !(blockedUntil[m] > now));
+    if (!model) {
+      const until = Math.min(...GROQ_MODELS.map(m => blockedUntil[m]));
+      if (until - now > MAX_WAIT_SEC * 1000) throw new Error('오늘 Groq 무료 한도를 다 썼습니다. 내일 다시 시도하세요.');
+      while (Date.now() < until) {
+        const left = Math.ceil((until - Date.now()) / 1000);
+        onWait(`Groq 사용 한도에 걸려 ${Math.floor(left / 60)}분 ${left % 60}초 뒤 이어서 진행합니다`);
+        await sleep(Math.min(1000, until - Date.now()), signal);
+      }
+      onWait('한도가 풀려 받아쓰기를 이어서 진행합니다');
+      continue;
+    }
+    const form = new FormData();
+    form.append('file', mp3, 'audio.mp3');
+    form.append('model', model);
+    form.append('language', 'ko'); // 자동 감지는 영어 용어가 많은 강의를 영어로 잘못 고르기도 해서 한국어로 고정함
+    form.append('response_format', 'verbose_json');
+    form.append('temperature', '0');
+    if (prompt) form.append('prompt', prompt);
+    const res = await fetch(GROQ_URL, { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form, signal });
+    if (res.ok) {
+      const j = await res.json();
+      return { text: (j.text ?? '') as string, segments: (j.segments ?? []) as Segment[] };
+    }
+    const body = await res.text();
+    if (res.status === 401) {
+      await chrome.storage.local.remove('groqKey'); // 다음에 누르면 키를 다시 물음
+      throw new Error('Groq API 키가 올바르지 않습니다. 다시 눌러 새 키를 입력하세요.');
+    }
+    if (res.status === 429) {
+      blockedUntil[model] = Date.now() + waitSec(res, body) * 1000;
+      continue;
+    }
+    if (res.status >= 500 && ++fails <= 3) {
+      await sleep(3000 * fails, signal);
+      continue;
+    }
+    throw new Error(`Groq 오류 ${res.status}: ${body.slice(0, 200)}`);
+  }
+}
+
+// PCM → 20분 단위 MP3 → Groq 받아쓰기 → "[00:01:23] 문장" 줄. 앞 조각을 받아쓰는 동안 다음 조각을 인코딩함.
+// 진행도는 인코딩한 길이와 받아쓰기를 마친 길이를 반씩 반영함.
+async function toTranscript(urls: string[], seconds: number, key: string, signal: AbortSignal, onProgress: (f: number) => void, onWait: (msg: string) => void) {
+  const lines: string[] = [];
+  let chain = Promise.resolve(), prompt = '', enc: any, parts: Blob[] = [], from = 0, encoded = 0, done = 0;
+  const report = () => onProgress((encoded + done) / 2 / seconds);
+  const send = (end: number) => {
+    const mp3 = new Blob([...parts, new Blob([enc.flush()])], { type: 'audio/mpeg' });
+    const start = from;
+    [enc, parts, from] = [undefined, [], end];
+    chain = chain.then(async () => {
+      const r = await transcribe(mp3, key, prompt, signal, onWait);
+      for (const s of r.segments) if (s.text.trim()) lines.push(`[${hms(start + s.start)}] ${s.text.trim()}`);
+      prompt = r.text.slice(-200);
+      done = end;
+      report();
+    });
+    chain.catch(() => {}); // 실패는 아래 await chain에서 처리함
+  };
+  let last = 0;
+  await decodeAudio(urls, signal, (pcm, rate, end) => {
+    enc ??= new lamejs.Mp3Encoder(1, rate, 48);
+    parts.push(new Blob([enc.encodeBuffer(pcm)]));
+    last = encoded = end;
+    report();
+    if (end - from >= CHUNK_SEC) send(end);
+  });
+  if (enc) send(last);
+  await chain;
+  return [`# ${vodName()}`, `${location.href}`, `길이 ${hms(seconds)} · Groq Whisper로 받아씀`, '', ...lines, ''].join('\n');
 }
 
 // ponytail: 파일 전체를 Blob으로 들고 있음(크롬은 큰 Blob을 디스크로 넘김).
@@ -173,9 +320,15 @@ async function loadLibs() {
 const timeLeft = (s: number) => (s < 60 ? `${Math.max(10, Math.ceil(s / 10) * 10)}초` : `약 ${Math.round(s / 60)}분`);
 
 let busy = false;
-async function downloadVod(fmt: 'mp4' | 'mp3') {
+async function downloadVod(fmt: 'mp4' | 'mp3' | 'txt') {
   if (busy) return toast('이미 다운로드 중입니다.', 'warning');
   if (!(await notice('vod', '강의 다운로드 안내', VOD_NOTICE))) return;
+  let key = '';
+  if (FULL && fmt === 'txt') {
+    if (!(await notice('groq', '강의 스크립트 안내', GROQ_NOTICE))) return;
+    key = ((await chrome.storage.local.get('groqKey')).groqKey as string) || (await askGroqKey()) || '';
+    if (!key) return;
+  }
   busy = true;
   const ctl = new AbortController();
   // 사이트 토스트에 글자, 그 아래 Bootstrap 진행 막대, 오른쪽 취소 버튼을 배치함.
@@ -201,14 +354,24 @@ async function downloadVod(fmt: 'mp4' | 'mp3') {
     (bar.firstElementChild as HTMLElement).style.width = `${p}%`;
     bar.setAttribute('aria-valuenow', String(p));
   };
+  // 스크립트: Groq 한도를 기다리는 동안 진행 문구 대신 남은 대기 시간을 보여 줌. 받아쓰기를 마치면 다시 진행도로 바뀜.
+  const wait = (msg: string) => {
+    shown = -1;
+    text.textContent = `${msg} (이 탭을 닫지 마세요)`;
+  };
   try {
     await loadLibs();
     const { urls, seconds } = await segmentUrls();
     ctl.signal.throwIfAborted();
     start = performance.now();
     progress(0);
+    const name = vodName().replace(/[\\/:*?"<>|]/g, '_');
+    if (FULL && fmt === 'txt') {
+      save([new Blob([await toTranscript(urls, seconds, key, ctl.signal, progress, wait)])], 'text/plain;charset=utf-8', `${name}.txt`);
+      return;
+    }
     const parts = await (fmt === 'mp4' ? toMp4(urls, seconds, ctl.signal, progress) : toMp3(urls, seconds, ctl.signal, progress));
-    save(parts, fmt === 'mp4' ? 'video/mp4' : 'audio/mpeg', `${vodName().replace(/[\\/:*?"<>|]/g, '_')}.${fmt}`);
+    save(parts, fmt === 'mp4' ? 'video/mp4' : 'audio/mpeg', `${name}.${fmt}`);
   } catch (e) {
     if (ctl.signal.aborted) toast('다운로드를 취소했습니다.', 'guide');
     else toast(`다운로드에 실패했습니다: ${(e as Error).message}`, 'danger', 8000);
@@ -259,10 +422,11 @@ function addDownloadMenu(box: Element) {
     <div class="dropdown-menu dropdown-menu-end show">
       <button type="button" class="dropdown-item" data-fmt="mp4">동영상 (MP4)</button>
       <button type="button" class="dropdown-item" data-fmt="mp3">오디오 (MP3)</button>
+      ${FULL ? '<button type="button" class="dropdown-item" data-fmt="txt">스크립트 (TXT)</button>' : ''}
     </div>`;
   tooltip(d.querySelector('summary')!, '강의 다운로드');
   d.querySelector('.dropdown-menu')!.addEventListener('click', e => {
-    const fmt = (e.target as Element).closest<HTMLElement>('[data-fmt]')?.dataset.fmt as 'mp4' | 'mp3' | undefined;
+    const fmt = (e.target as Element).closest<HTMLElement>('[data-fmt]')?.dataset.fmt as 'mp4' | 'mp3' | 'txt' | undefined;
     if (!fmt) return;
     d.open = false;
     downloadVod(fmt);
