@@ -199,7 +199,7 @@ async function askGroqKey() {
       <p>스크립트 받아쓰기에 쓸 Groq API 키를 입력하세요. 키는 이 브라우저(chrome.storage.local)에만 저장됩니다.</p>
       <p>키는 <a href="https://console.groq.com/keys" target="_blank" rel="noopener">Groq</a>에서 무료로 만들 수 있습니다(카드 등록 없음).<br>
         가입 → API Keys → Create API Key → 이름 적고 Submit → Copy<br>
-        <a href="${GROQ_GUIDE}" target="_blank" rel="noopener">화면별 발급 방법 보기</a></p>
+        <a href="${GROQ_GUIDE}" target="_blank" rel="noopener">발급 방법 가이드</a></p>
       <input type="password" class="form-control" placeholder="gsk_..." autocomplete="off" required>
     </div>
     <div class="modal-footer">
