@@ -11,12 +11,16 @@ const VOD_NOTICE = `강의 다운로드는 개인 학습(복습) 목적으로만
 · 내려받은 파일을 다른 사람에게 공유하거나 인터넷에 올리면 안 됩니다.
 · 내려받은 파일로 시청한 시간은 출석·진도율에 반영되지 않습니다.`;
 
-const vodName = () => document.querySelector('a.vod-item-container.active .vod-info-title')?.textContent?.trim() || document.title;
+// 주차 화면·모아보기 표에서 받을 때는 받아 온 강의 페이지(doc)에서 읽음.
+const vodName = (doc = document) => doc.querySelector('a.vod-item-container.active .vod-info-title')?.textContent?.trim() || doc.title;
 
 // 5. 강의 다운로드 ---------------------------------------------------------------
 
-async function segmentUrls() {
-  const setup = JSON.parse(document.querySelector<HTMLElement>('[data-setup-lazy]')!.dataset.setupLazy!);
+async function segmentUrls(doc = document) {
+  const el = doc.querySelector<HTMLElement>('[data-setup-lazy]');
+  // 로그인이 풀리면 강의 페이지 대신 로그인 화면이 옴
+  if (!el) throw new Error('강의 정보를 찾지 못했습니다. 페이지를 새로고침한 뒤 다시 시도하세요.');
+  const setup = JSON.parse(el.dataset.setupLazy!);
   let url: string = [].concat(setup.sources)[0]['src'];
   let text = await (await fetch(url)).text();
   if (text.includes('#EXT-X-STREAM-INF')) { // 마스터 재생 목록이면 가장 높은 화질을 고름
@@ -271,7 +275,7 @@ async function transcribe(mp3: Blob, key: string, prompt: string, signal: AbortS
 
 // PCM → 20분 단위 MP3 → Groq 받아쓰기 → "[00:01:23] 문장" 줄. 앞 조각을 받아쓰는 동안 다음 조각을 인코딩함.
 // 진행도는 인코딩한 길이와 받아쓰기를 마친 길이를 반씩 반영함.
-async function toTranscript(urls: string[], seconds: number, key: string, signal: AbortSignal, onProgress: (f: number) => void, onWait: (msg: string) => void) {
+async function toTranscript(urls: string[], seconds: number, title: string, href: string, key: string, signal: AbortSignal, onProgress: (f: number) => void, onWait: (msg: string) => void) {
   const lines: string[] = [];
   let chain = Promise.resolve(), prompt = '', enc: any, parts: Blob[] = [], from = 0, encoded = 0, done = 0;
   const report = () => onProgress((encoded + done) / 2 / seconds);
@@ -298,7 +302,7 @@ async function toTranscript(urls: string[], seconds: number, key: string, signal
   });
   if (enc) send(last);
   await chain;
-  return [`# ${vodName()}`, `${location.href}`, `길이 ${hms(seconds)} · Groq Whisper로 받아씀`, '', ...lines, ''].join('\n');
+  return [`# ${title}`, href, `길이 ${hms(seconds)} · Groq Whisper로 받아씀`, '', ...lines, ''].join('\n');
 }
 
 // ponytail: 파일 전체를 Blob으로 들고 있음(크롬은 큰 Blob을 디스크로 넘김).
@@ -320,7 +324,8 @@ async function loadLibs() {
 const timeLeft = (s: number) => (s < 60 ? `${Math.max(10, Math.ceil(s / 10) * 10)}초` : `약 ${Math.round(s / 60)}분`);
 
 let busy = false;
-async function downloadVod(fmt: 'mp4' | 'mp3' | 'txt') {
+// cmid를 주면(주차 화면·모아보기 표) 그 강의 페이지를 받아 와 영상 주소와 제목을 읽음.
+async function downloadVod(fmt: 'mp4' | 'mp3' | 'txt', cmid?: string) {
   if (busy) return toast('이미 다운로드 중입니다.', 'warning');
   if (!(await notice('vod', '강의 다운로드 안내', VOD_NOTICE))) return;
   let key = '';
@@ -361,13 +366,16 @@ async function downloadVod(fmt: 'mp4' | 'mp3' | 'txt') {
   };
   try {
     await loadLibs();
-    const { urls, seconds } = await segmentUrls();
+    const href = cmid ? new URL(`/mod/vod/view.php?id=${cmid}`, location.origin).href : location.href;
+    const doc = cmid ? new DOMParser().parseFromString(await (await fetch(href, { signal: ctl.signal })).text(), 'text/html') : document;
+    const { urls, seconds } = await segmentUrls(doc);
     ctl.signal.throwIfAborted();
     start = performance.now();
     progress(0);
-    const name = vodName().replace(/[\\/:*?"<>|]/g, '_');
+    const title = vodName(doc);
+    const name = title.replace(/[\\/:*?"<>|]/g, '_');
     if (FULL && fmt === 'txt') {
-      save([new Blob([await toTranscript(urls, seconds, key, ctl.signal, progress, wait)])], 'text/plain;charset=utf-8', `${name}.txt`);
+      save([new Blob([await toTranscript(urls, seconds, title, href, key, ctl.signal, progress, wait)])], 'text/plain;charset=utf-8', `${name}.txt`);
       return;
     }
     const parts = await (fmt === 'mp4' ? toMp4(urls, seconds, ctl.signal, progress) : toMp3(urls, seconds, ctl.signal, progress));
@@ -415,10 +423,11 @@ function tooltip(el: HTMLElement, text: string) {
   el.addEventListener('blur', hide);
 }
 
-function addDownloadMenu(box: Element) {
+// 강의 화면은 버튼 줄 맨 앞에 둥근 버튼으로, 주차 카드·표(cmid 있음)는 파일 다운로드 아이콘과 같은 모양·자리에 붙임.
+function addDownloadMenu(box: Element, cmid?: string) {
   const d = document.createElement('details');
-  d.className = 'cmx-vod-dl';
-  d.innerHTML = `<summary class="btn-csms-svgicon-circle btn-csms-svgicon-circle-help" aria-label="강의 다운로드">${DL_SVG}</summary>
+  d.className = cmid ? 'cmx-vod-dl cmx-dl' : 'cmx-vod-dl';
+  d.innerHTML = `<summary class="${cmid ? 'btn-csms-icon btn-csms-icon-gray-nospace-secondary btn-csms-icon-sm' : 'btn-csms-svgicon-circle btn-csms-svgicon-circle-help'}" aria-label="강의 다운로드">${DL_SVG}</summary>
     <div class="dropdown-menu dropdown-menu-end show">
       <button type="button" class="dropdown-item" data-fmt="mp4">동영상 (MP4)</button>
       <button type="button" class="dropdown-item" data-fmt="mp3">오디오 (MP3)</button>
@@ -429,10 +438,20 @@ function addDownloadMenu(box: Element) {
     const fmt = (e.target as Element).closest<HTMLElement>('[data-fmt]')?.dataset.fmt as 'mp4' | 'mp3' | 'txt' | undefined;
     if (!fmt) return;
     d.open = false;
-    downloadVod(fmt);
+    downloadVod(fmt, cmid);
   });
   document.addEventListener('click', e => d.contains(e.target as Node) || (d.open = false));
-  box.prepend(d);
+  if (!cmid) return void box.prepend(d);
+  // 주차 카드는 아래 카드가 메뉴를 덮고, 표는 감싼 상자(.table-coursemos-wrap)가 넘치는 부분을 잘라서
+  // 메뉴를 화면 기준으로 띄우고, 스크롤하면 닫음.
+  const menu = d.querySelector<HTMLElement>('.dropdown-menu')!;
+  d.addEventListener('toggle', () => {
+    if (!d.open) return;
+    const r = d.getBoundingClientRect();
+    Object.assign(menu.style, { position: 'fixed', top: `${r.bottom + 4}px`, right: `${document.documentElement.clientWidth - r.right}px` });
+  });
+  addEventListener('scroll', () => (d.open = false), { capture: true, passive: true });
+  box.tagName === 'A' ? box.after(d) : box.append(d);
 }
 
 // 6. 강의 종료 알림 · 다음 영상 -----------------------------------------------------
@@ -632,6 +651,8 @@ export function initVod() {
     .cmx-vod-dl > summary { list-style: none; cursor: pointer; }
     .cmx-vod-dl > summary::-webkit-details-marker { display: none; }
     .cmx-vod-dl .dropdown-menu { position: absolute; top: calc(100% + 4px); right: 0; min-width: 0; width: max-content; }
+    /* 카드의 다운로드 아이콘은 translateY로 가운데에 두는데, transform이 있으면 fixed 메뉴가 아이콘 기준이 됨. 28px = 아이콘 높이. */
+    .activity-item > .cmx-vod-dl { top: calc(50% - 14px); transform: none; }
     .cmx-vod-dl .dropdown-item { padding-right: 14px; } /* 사이트 항목 여백이 왼쪽 14px, 오른쪽 8px이라 맞춤 */
     /* 다운로드 토스트: 사이트의 .toast-text가 가운데 정렬 가로 배치라 진행 막대를 글자 아래로 쌓음. */
     .cmx-dl-toast .toast-text { flex-direction: column; font-variant-numeric: tabular-nums; }
@@ -664,7 +685,12 @@ export function initVod() {
   Promise.all([ready, parsed]).then(() => {
     if (!siteActive()) return;
     // 안쪽 .csms-flex-box가 아닌 바깥 상자에 넣어야 ? 버튼과의 간격(4px 아닌 8px)이 맞음.
-    if (cfg.vodDownload) onEach('.additional-info .right-container', addDownloadMenu);
+    if (cfg.vodDownload) {
+      onEach('.additional-info .right-container', box => addDownloadMenu(box));
+      // 주차 화면의 강의 카드, 표(학습활동 모아보기·활동 현황)의 강의 이름 옆.
+      onEach('li.modtype_vod .activity-item', item => addDownloadMenu(item, item.closest('li')!.id.replace('module-', '')));
+      onEach<HTMLAnchorElement>('#region-main td a[href*="/mod/vod/view.php"]', a => addDownloadMenu(a, new URL(a.href).searchParams.get('id')!));
+    }
     // 항상 듣도록 구현함. onEnded가 끝나는 순간 endNotify/autoNext를 읽으므로 두 스위치는 새로고침 없이 적용됨.
     onEach<HTMLVideoElement>('video.vjs-tech', v => v.addEventListener('ended', onEnded));
     if (cfg.speedPanel) onEach<HTMLVideoElement>('video.vjs-tech', addSpeedPanel);
