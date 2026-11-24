@@ -1,10 +1,10 @@
-# Groq API 키 만들기 (강의 스크립트용)
+# Groq API 키 만들기 (강의 스크립트·자막용)
 
-Cosmate의 **강의 스크립트(TXT)** 기능은 강의 오디오를 [Groq](https://groq.com)의 Whisper로 받아씁니다. 그래서 본인의 Groq API 키가 한 번 필요합니다.
+Cosmate의 **강의 스크립트·자막** 기능은 강의 오디오를 [Groq](https://groq.com)의 Whisper로 받아씁니다. 그래서 본인의 Groq API 키가 한 번 필요합니다.
 
 - Groq(그록)은 AI 모델을 빠르게 돌려 주는 회사입니다.
 - 무료로 만들 수 있고 카드를 등록할 필요가 없습니다.
-- 강의 스크립트 기능은 GitHub 릴리스 버전(`-full.zip`)에만 있습니다.
+- 스크립트·자막 기능은 GitHub 릴리스 버전(`-full.zip`)에만 있습니다.
 
 ## 1. Groq 가입·로그인
 
