@@ -180,14 +180,19 @@ const CHUNK_SEC = 20 * 60;
 // 한도가 풀릴 때까지 이보다 오래 기다려야 하면 하루 한도를 다 쓴 것으로 보고 멈춤.
 const MAX_WAIT_SEC = 70 * 60;
 
-const GROQ_NOTICE = `스크립트를 만들려면 강의 오디오를 Groq(api.groq.com)로 보내 받아쓰기(Whisper)를 합니다.
+const GROQ_NOTICE = `스크립트·자막을 만들려면 강의 오디오를 Groq(api.groq.com)로 보내 받아쓰기(Whisper)를 합니다.
 
 · 오디오는 입력한 Groq API 키로 사용자 계정에 보내지며, Cosmate 개발자에게는 아무것도 전송되지 않습니다.
 · Groq의 데이터 처리 방침은 groq.com의 개인정보처리방침을 따릅니다.
-· 만든 스크립트도 강의 영상과 같이 개인 학습(복습) 목적으로만 사용해야 합니다.
+· 만든 스크립트·자막도 강의 영상과 같이 개인 학습(복습) 목적으로만 사용해야 합니다.
 · 다음 창에서 본인의 Groq API 키(무료)를 입력합니다. 처음 한 번만 입력하면 됩니다.`;
 
 const hms = (s: number) => [s / 3600, (s / 60) % 60, s % 60].map(n => String(Math.floor(n)).padStart(2, '0')).join(':');
+// SRT 시각 "00:01:23,450". 밀리초를 먼저 반올림해야 ,1000이 생기지 않음.
+const srtTime = (s: number) => {
+  const ms = Math.round(s * 1000);
+  return `${hms(Math.floor(ms / 1000))},${String(ms % 1000).padStart(3, '0')}`;
+};
 
 // 사이트 모달 모양으로 Groq API 키를 입력받음. 취소하면 null.
 async function askGroqKey() {
@@ -196,7 +201,7 @@ async function askGroqKey() {
   d.innerHTML = `<form method="dialog" class="modal-content">
     <div class="modal-header"><h5 class="modal-title">Groq API 키 입력</h5></div>
     <div class="modal-body">
-      <p>스크립트 받아쓰기에 쓸 Groq API 키를 입력하세요. 키는 이 브라우저(chrome.storage.local)에만 저장됩니다.</p>
+      <p>스크립트·자막 받아쓰기에 쓸 Groq API 키를 입력하세요. 키는 이 브라우저(chrome.storage.local)에만 저장됩니다.</p>
       <p>키는 <a href="https://console.groq.com/keys" target="_blank" rel="noopener">Groq</a>에서 무료로 만들 수 있습니다(카드 등록 없음).<br>
         가입 → API Keys → Create API Key → 이름 적고 Submit → Copy<br>
         <a href="${GROQ_GUIDE}" target="_blank" rel="noopener">발급 방법 가이드</a></p>
@@ -229,7 +234,8 @@ function waitSec(res: Response, body: string) {
   return sec || Number(res.headers.get('retry-after')) || 60;
 }
 
-type Segment = { start: number; text: string };
+type Segment = { start: number; end: number; text: string };
+type Cue = Segment; // 강의 전체 기준 초
 const blockedUntil: Record<string, number> = {}; // 모델 → 한도가 풀리는 시각(ms). 같은 탭의 다음 강의에도 이어짐.
 
 // 조각 하나를 받아씀. 한도(429)에 걸리면 다른 모델로 넘어가고, 모두 막혔으면 풀릴 때까지 기다림.
@@ -277,10 +283,10 @@ async function transcribe(mp3: Blob, key: string, prompt: string, signal: AbortS
   }
 }
 
-// PCM → 20분 단위 MP3 → Groq 받아쓰기 → "[00:01:23] 문장" 줄. 앞 조각을 받아쓰는 동안 다음 조각을 인코딩함.
-// 진행도는 인코딩한 길이와 받아쓰기를 마친 길이를 반씩 반영함.
-async function toTranscript(urls: string[], seconds: number, title: string, href: string, key: string, signal: AbortSignal, onProgress: (f: number) => void, onWait: (msg: string) => void) {
-  const lines: string[] = [];
+// PCM → 20분 단위 MP3 → Groq 받아쓰기 → 구간(시작·끝 초, 문장). 앞 조각을 받아쓰는 동안 다음 조각을 인코딩함.
+// 진행도는 인코딩한 길이와 받아쓰기를 마친 길이를 반씩 반영함. 조각을 마칠 때마다 onCues로 지금까지의 구간을 넘김.
+async function toCues(urls: string[], seconds: number, key: string, signal: AbortSignal, onProgress: (f: number) => void, onWait: (msg: string) => void, onCues?: (c: Cue[]) => void) {
+  const cues: Cue[] = [];
   let chain = Promise.resolve(), prompt = '', enc: any, parts: Blob[] = [], from = 0, encoded = 0, done = 0;
   const report = () => onProgress((encoded + done) / 2 / seconds);
   const send = (end: number) => {
@@ -289,7 +295,8 @@ async function toTranscript(urls: string[], seconds: number, title: string, href
     [enc, parts, from] = [undefined, [], end];
     chain = chain.then(async () => {
       const r = await transcribe(mp3, key, prompt, signal, onWait);
-      for (const s of r.segments) if (s.text.trim()) lines.push(`[${hms(start + s.start)}] ${s.text.trim()}`);
+      for (const s of r.segments) if (s.text.trim()) cues.push({ start: start + s.start, end: start + s.end, text: s.text.trim() });
+      onCues?.(cues);
       prompt = r.text.slice(-200);
       done = end;
       report();
@@ -306,7 +313,7 @@ async function toTranscript(urls: string[], seconds: number, title: string, href
   });
   if (enc) send(last);
   await chain;
-  return [`# ${title}`, href, `길이 ${hms(seconds)} · Groq Whisper로 받아씀`, '', ...lines, ''].join('\n');
+  return cues;
 }
 
 // ponytail: 파일 전체를 Blob으로 들고 있음(크롬은 큰 Blob을 디스크로 넘김).
@@ -329,15 +336,20 @@ const timeLeft = (s: number) => (s < 60 ? `${Math.max(10, Math.ceil(s / 10) * 10
 
 let busy = false;
 // cmid를 주면(주차 화면·모아보기 표) 그 강의 페이지를 받아 와 영상 주소와 제목을 읽음.
-async function downloadVod(fmt: 'mp4' | 'mp3' | 'txt', cmid?: string) {
-  if (busy) return toast('이미 다운로드 중입니다.', 'warning');
+// 'sub'(자막)는 파일로 저장하지 않고 받아쓴 구간을 onCues로 넘겨 이 강의 화면에 띄움. 마치면 true.
+// 스크립트(TXT·SRT)와 자막은 강의별로 저장한 받아쓰기 하나를 같이 씀. 셋 중 하나를 만들면 나머지는 받아쓰기 없이 바로 됨.
+async function downloadVod(fmt: 'mp4' | 'mp3' | 'txt' | 'srt' | 'sub', cmid?: string, onCues?: (c: Cue[]) => void) {
+  if (busy) return void toast('이미 다운로드 중입니다.', 'warning');
   if (!(await notice('vod', '강의 다운로드 안내', VOD_NOTICE))) return;
+  const href = cmid ? new URL(`/mod/vod/view.php?id=${cmid}`, location.origin).href : location.href;
+  const saved = FULL && fmt !== 'mp4' && fmt !== 'mp3' ? await loadCues(subKey(href)) : undefined;
   let key = '';
-  if (FULL && fmt === 'txt') {
+  if (FULL && fmt !== 'mp4' && fmt !== 'mp3' && !saved) {
     if (!(await notice('groq', '강의 스크립트 안내', GROQ_NOTICE))) return;
     key = ((await chrome.storage.local.get('groqKey')).groqKey as string) || (await askGroqKey()) || '';
     if (!key) return;
   }
+  const what = fmt === 'sub' ? '자막 만들기' : '다운로드';
   busy = true;
   const ctl = new AbortController();
   // 사이트 토스트에 글자, 그 아래 Bootstrap 진행 막대, 오른쪽 취소 버튼을 배치함.
@@ -359,7 +371,7 @@ async function downloadVod(fmt: 'mp4' | 'mp3' | 'txt', cmid?: string) {
     shown = p;
     // 남은 시간은 지금까지의 속도로 계산하고, 2%가 넘기 전에는 표시하지 않음.
     const left = f > 0.02 ? (((performance.now() - start) / 1000) * (1 - f)) / f : 0;
-    text.textContent = `${fmt.toUpperCase()} 파일을 만드는 중… ${p}%${left ? ` · ${timeLeft(left)} 남음` : ''} (이 탭을 닫지 마세요)`;
+    text.textContent = `${fmt === 'sub' ? '자막을' : `${fmt.toUpperCase()} 파일을`} 만드는 중… ${p}%${left ? ` · ${timeLeft(left)} 남음` : ''} (이 탭을 닫지 마세요)`;
     (bar.firstElementChild as HTMLElement).style.width = `${p}%`;
     bar.setAttribute('aria-valuenow', String(p));
   };
@@ -370,7 +382,6 @@ async function downloadVod(fmt: 'mp4' | 'mp3' | 'txt', cmid?: string) {
   };
   try {
     await loadLibs();
-    const href = cmid ? new URL(`/mod/vod/view.php?id=${cmid}`, location.origin).href : location.href;
     const doc = cmid ? new DOMParser().parseFromString(await (await fetch(href, { signal: ctl.signal })).text(), 'text/html') : document;
     const { urls, seconds } = await segmentUrls(doc);
     ctl.signal.throwIfAborted();
@@ -378,15 +389,27 @@ async function downloadVod(fmt: 'mp4' | 'mp3' | 'txt', cmid?: string) {
     progress(0);
     const title = vodName(doc);
     const name = title.replace(/[\\/:*?"<>|]/g, '_');
-    if (FULL && fmt === 'txt') {
-      save([new Blob([await toTranscript(urls, seconds, title, href, key, ctl.signal, progress, wait)])], 'text/plain;charset=utf-8', `${name}.txt`);
-      return;
+    if (FULL && fmt !== 'mp4' && fmt !== 'mp3') { // 스크립트·자막
+      const cues = saved ?? await toCues(urls, seconds, key, ctl.signal, progress, wait, onCues);
+      if (!saved) await chrome.storage.local.set({ [subKey(href)]: cues.map(c => [+c.start.toFixed(2), +c.end.toFixed(2), c.text]) });
+      if (fmt === 'sub') {
+        if (saved) onCues?.(saved);
+        else toast('자막을 저장했습니다. 다음에 이 강의를 열면 바로 나옵니다.', 'success', 6000);
+        return true;
+      }
+      // SRT는 MP4와 같은 이름이라 같은 폴더에 두면 VLC·IINA·팟플레이어가 자막을 자동으로 불러옴.
+      const body = fmt === 'srt'
+        ? cues.map((c, i) => `${i + 1}\n${srtTime(c.start)} --> ${srtTime(c.end)}\n${c.text}\n`).join('\n')
+        : [`# ${title}`, href, `길이 ${hms(seconds)} · Groq Whisper로 받아씀`, '', ...cues.map(c => `[${hms(c.start)}] ${c.text}`), ''].join('\n');
+      save([new Blob([body])], 'text/plain;charset=utf-8', `${name}.${fmt}`);
+      return true;
     }
     const parts = await (fmt === 'mp4' ? toMp4(urls, seconds, ctl.signal, progress) : toMp3(urls, seconds, ctl.signal, progress));
     save(parts, fmt === 'mp4' ? 'video/mp4' : 'audio/mpeg', `${name}.${fmt}`);
+    return true;
   } catch (e) {
-    if (ctl.signal.aborted) toast('다운로드를 취소했습니다.', 'guide');
-    else toast(`다운로드에 실패했습니다: ${(e as Error).message}`, 'danger', 8000);
+    if (ctl.signal.aborted) toast(`${what}를 취소했습니다.`, 'guide');
+    else toast(`${what}에 실패했습니다: ${(e as Error).message}`, 'danger', 8000);
   } finally {
     ctl.abort(); // 실패했을 때 미리 받던 조각 요청과 오디오 디코더를 정리함
     t.remove();
@@ -425,6 +448,7 @@ function tooltip(el: HTMLElement, text: string) {
   el.addEventListener('focus', show);
   el.addEventListener('mouseleave', hide);
   el.addEventListener('blur', hide);
+  return hide;
 }
 
 // 강의 화면은 버튼 줄 맨 앞에 둥근 버튼으로, 주차 카드·표(cmid 있음)는 파일 다운로드 아이콘과 같은 모양·자리에 붙임.
@@ -435,25 +459,30 @@ function addDownloadMenu(box: Element, cmid?: string) {
     <div class="dropdown-menu dropdown-menu-end show">
       <button type="button" class="dropdown-item" data-fmt="mp4">동영상 (MP4)</button>
       <button type="button" class="dropdown-item" data-fmt="mp3">오디오 (MP3)</button>
-      ${FULL ? '<button type="button" class="dropdown-item" data-fmt="txt">스크립트 (TXT)</button>' : ''}
+      ${FULL ? `<button type="button" class="dropdown-item" data-fmt="txt">스크립트 (TXT)</button>
+      <button type="button" class="dropdown-item" data-fmt="srt">자막 (SRT)</button>` : ''}
     </div>`;
-  tooltip(d.querySelector('summary')!, '강의 다운로드');
+  const hideTip = tooltip(d.querySelector('summary')!, '강의 다운로드');
   d.querySelector('.dropdown-menu')!.addEventListener('click', e => {
-    const fmt = (e.target as Element).closest<HTMLElement>('[data-fmt]')?.dataset.fmt as 'mp4' | 'mp3' | 'txt' | undefined;
+    const fmt = (e.target as Element).closest<HTMLElement>('[data-fmt]')?.dataset.fmt as 'mp4' | 'mp3' | 'txt' | 'srt' | undefined;
     if (!fmt) return;
     d.open = false;
     downloadVod(fmt, cmid);
   });
   document.addEventListener('click', e => d.contains(e.target as Node) || (d.open = false));
-  if (!cmid) return void box.prepend(d);
+  // 아래 공간이 모자라면 위로 엶(강의 화면은 버튼 줄이 화면 아래쪽에 걸리기 쉬움). 위도 모자라면 그대로 아래로 엶.
   // 주차 카드는 아래 카드가 메뉴를 덮고, 표는 감싼 상자(.table-coursemos-wrap)가 넘치는 부분을 잘라서
-  // 메뉴를 화면 기준으로 띄우고, 스크롤하면 닫음.
+  // cmid가 있으면 메뉴를 화면 기준으로 띄우고, 스크롤하면 닫음.
   const menu = d.querySelector<HTMLElement>('.dropdown-menu')!;
   d.addEventListener('toggle', () => {
     if (!d.open) return;
-    const r = d.getBoundingClientRect();
-    Object.assign(menu.style, { position: 'fixed', top: `${r.bottom + 4}px`, right: `${document.documentElement.clientWidth - r.right}px` });
+    hideTip(); // 위로 열린 메뉴를 툴팁이 가리지 않게 함
+    const r = d.getBoundingClientRect(), h = menu.offsetHeight, vh = document.documentElement.clientHeight;
+    const up = r.bottom + 4 + h > vh && r.top - 4 - h > 0;
+    if (!cmid) return void d.classList.toggle('cmx-up', up);
+    Object.assign(menu.style, { position: 'fixed', top: `${up ? r.top - 4 - h : r.bottom + 4}px`, right: `${document.documentElement.clientWidth - r.right}px` });
   });
+  if (!cmid) return void box.prepend(d);
   addEventListener('scroll', () => (d.open = false), { capture: true, passive: true });
   box.tagName === 'A' ? box.after(d) : box.append(d);
 }
@@ -647,6 +676,73 @@ function addCaptureButton(fs: Element) {
   tooltip(b, '지금 장면 저장');
 }
 
+// 12. 자막. GitHub용(FULL) 빌드에만 있음 ------------------------------------------------
+
+// 스크립트와 같은 받아쓰기 결과를 강의(cmid)별로 chrome.storage.local에 [시작, 끝, 문장]으로 둠.
+// 다시 열면 받아쓰기 없이 바로 띄움. 사이트 CC 버튼은 페이지 쪽 videojs를 써야 해서 쓰지 않고 영상 위에 직접 그림.
+// ponytail: 한 시간 강의가 약 50KB라 기본 한도(10MB)로 강의 200개 정도. 넘치면 unlimitedStorage 권한을 추가할 것.
+// 주차 화면·표에서 받는 스크립트도 같은 강의의 자막을 찾도록 강의 페이지 주소(href)의 id로 묶음.
+const subKey = (href: string) => {
+  const u = new URL(href);
+  return `sub:${u.origin}${u.pathname}?id=${u.searchParams.get('id')}`;
+};
+const fromSaved = (v?: [number, number, string][]) => v?.map(([start, end, text]): Cue => ({ start, end, text }));
+const loadCues = async (key: string) => fromSaved((await chrome.storage.local.get(key))[key] as [number, number, string][] | undefined);
+const CC_SVG = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.5" stroke="#fff" stroke-width="2"/><path d="M10.5 10.2a2.2 2.2 0 1 0 0 3.6M17 10.2a2.2 2.2 0 1 0 0 3.6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>';
+
+function addSubtitleButton(fs: Element) {
+  const player = fs.closest<HTMLElement>('.video-js');
+  const video = player?.querySelector<HTMLVideoElement>('video.vjs-tech');
+  if (!player || !video) return;
+  const box = document.createElement('div');
+  box.className = 'cmx-sub';
+  box.hidden = true;
+  player.append(box);
+  const b = document.createElement('button');
+  b.className = 'vjs-control vjs-button cmx-cc';
+  b.type = 'button';
+  b.setAttribute('aria-label', '자막');
+  b.innerHTML = CC_SVG;
+
+  let cues: Cue[] = [], on = false;
+  const sync = () => {
+    const t = video.currentTime;
+    const c = on ? cues.find(c => t >= c.start && t < c.end) : undefined;
+    if (box.textContent !== (c?.text ?? '')) box.textContent = c?.text ?? '';
+    box.hidden = !c;
+  };
+  const set = (v: boolean) => {
+    on = v;
+    b.classList.toggle('on', v);
+    b.setAttribute('aria-pressed', String(v));
+    sync();
+  };
+  video.addEventListener('timeupdate', sync);
+  video.addEventListener('seeked', sync);
+  // 처음 받은 자막이면 켜고, 이미 띄우던 중이면(받아쓰는 중 조각이 늘어남) 사용자가 켜고 끈 상태를 그대로 둠.
+  const use = (c?: Cue[]) => {
+    if (!c) return;
+    const first = !cues.length;
+    cues = c;
+    first ? set(true) : sync();
+  };
+  // 저장된 자막을 띄움. 이 탭이나 다른 탭에서 스크립트(TXT·SRT)로 새로 저장돼도 새로고침 없이 바로 씀.
+  const key = subKey(location.href);
+  loadCues(key).then(use);
+  chrome.storage.onChanged.addListener((ch, area) => area === 'local' && use(fromSaved(ch[key]?.newValue as [number, number, string][] | undefined)));
+  // 자막이 있으면 켜고 끔. 없으면 받아쓰기를 시작하고, 조각을 마칠 때마다 받은 데까지 띄움. 실패·취소하면 지움.
+  b.onclick = async () => {
+    if (cues.length) return set(!on);
+    const ok = await downloadVod('sub', undefined, use);
+    if (!ok && !busy) {
+      cues = [];
+      set(false);
+    }
+  };
+  fs.before(b);
+  tooltip(b, '자막');
+}
+
 // URL로 거르지 않음. 모든 학교가 /mod/vod/view.php를 쓴다고 확신할 수 없어서, 강의 페이지의
 // 요소(플레이어, 버튼 줄)를 보고 붙이도록 구현함.
 export function initVod() {
@@ -655,6 +751,7 @@ export function initVod() {
     .cmx-vod-dl > summary { list-style: none; cursor: pointer; }
     .cmx-vod-dl > summary::-webkit-details-marker { display: none; }
     .cmx-vod-dl .dropdown-menu { position: absolute; top: calc(100% + 4px); right: 0; min-width: 0; width: max-content; }
+    .cmx-vod-dl.cmx-up .dropdown-menu { top: auto; bottom: calc(100% + 4px); }
     /* 카드의 다운로드 아이콘은 translateY로 가운데에 두는데, transform이 있으면 fixed 메뉴가 아이콘 기준이 됨. 28px = 아이콘 높이. */
     .activity-item > .cmx-vod-dl { top: calc(50% - 14px); transform: none; }
     .cmx-vod-dl .dropdown-item { padding-right: 14px; } /* 사이트 항목 여백이 왼쪽 14px, 오른쪽 8px이라 맞춤 */
@@ -684,7 +781,18 @@ export function initVod() {
     /* 사이트가 컨트롤바 아이콘 크기를 이 변수(18px)로 정해 width 속성이 무시됨. 22px이면 옆 아이콘과 맞음. */
     .cmx-pip, .cmx-shot { display: flex; align-items: center; justify-content: center; --csms-btn-icon-svg-size: 22px; }
     .cmx-pip svg, .cmx-shot svg { pointer-events: none; }
-  `;
+  ` + (FULL ? `
+    .cmx-cc { display: flex; align-items: center; justify-content: center; --csms-btn-icon-svg-size: 22px; }
+    .cmx-cc svg { pointer-events: none; }
+    .cmx-cc:not(.on) svg { opacity: .55; }
+
+    /* 자막: 컨트롤바가 보이면 그 위에, 재생 중 숨으면 아래로 내림. */
+    .cmx-sub { position: absolute; left: 50%; bottom: 64px; z-index: 2; transform: translateX(-50%); max-width: 84%;
+      width: max-content; padding: 2px 8px; border-radius: 4px; background: rgba(0, 0, 0, .75); color: #fff;
+      font-size: 20px; line-height: 1.45; text-align: center; pointer-events: none; transition: bottom .2s; }
+    .video-js.vjs-user-inactive.vjs-playing .cmx-sub { bottom: 5%; }
+    .video-js.vjs-fullscreen .cmx-sub { font-size: 32px; }
+  ` : '');
 
   Promise.all([ready, parsed]).then(() => {
     if (!siteActive()) return;
@@ -698,7 +806,8 @@ export function initVod() {
     // 항상 듣도록 구현함. onEnded가 끝나는 순간 endNotify/autoNext를 읽으므로 두 스위치는 새로고침 없이 적용됨.
     onEach<HTMLVideoElement>('video.vjs-tech', v => v.addEventListener('ended', onEnded));
     if (cfg.speedPanel) onEach<HTMLVideoElement>('video.vjs-tech', addSpeedPanel);
-    // 둘 다 전체 화면 버튼 앞에 넣으므로 이 순서면 [장면 저장][PiP][전체 화면]이 됨.
+    // 모두 전체 화면 버튼 앞에 넣으므로 이 순서면 [자막][장면 저장][PiP][전체 화면]이 됨.
+    if (FULL && cfg.vodDownload) onEach('.vjs-fullscreen-control', addSubtitleButton);
     if (cfg.vodDownload) onEach('.vjs-fullscreen-control', addCaptureButton);
     if (cfg.pipButton) onEach('.vjs-fullscreen-control', addPipButton);
     // 이동해 온 페이지를 음소거로 이어서 재생함. GitHub용(FULL) 빌드에만 있음.
